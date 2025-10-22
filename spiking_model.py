@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "mps" if torch.backends.mps.is_available() else "cpu" #Apple Silicon support
 thresh = 0.5 # neuronal threshold
 lens = 0.5 # hyper-parameters of approximate function
 decay = 0.2 # decay constants

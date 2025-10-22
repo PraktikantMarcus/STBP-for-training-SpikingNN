@@ -17,7 +17,8 @@ from spiking_model import*
 # os.environ['CUDA_VISIBLE_DEVICES'] = "3"
 names = 'spiking_model'
 data_path =  './raw/' #todo: input your data path
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "mps" if torch.backends.mps.is_available() else "cpu" #Apple Silicon support
 train_dataset = torchvision.datasets.MNIST(root= data_path, train=True, download=True, transform=transforms.ToTensor())
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
 
@@ -45,7 +46,9 @@ for epoch in range(num_epochs):
         images = images.float().to(device)
         outputs = snn(images)
         labels_ = torch.zeros(batch_size, 10).scatter_(1, labels.view(-1, 1), 1)
-        loss = criterion(outputs.cpu(), labels_)
+        labels_ =  labels_.to(device) #Apple Silicon support
+        #loss = criterion(outputs.cpu(), labels_)
+        loss = criterion(outputs, labels_) #Apple Silicon support
         running_loss += loss.item()
         loss.backward()
         optimizer.step()
@@ -61,11 +64,19 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(test_loader):
             inputs = inputs.to(device)
+            targets = targets.to(device, dtype=torch.long) #Apple Silicon support
+            bsz = targets.size(0)
             optimizer.zero_grad()
-            outputs = snn(inputs)
-            labels_ = torch.zeros(batch_size, 10).scatter_(1, targets.view(-1, 1), 1)
-            loss = criterion(outputs.cpu(), labels_)
-            _, predicted = outputs.cpu().max(1)
+            outputs = snn(inputs) 
+            outputs = outputs.to(device) #Apple Silicon support
+            labels_ = torch.zeros(bsz, 10, device=device, dtype=outputs.dtype) #Apple Silicon support
+            labels_.scatter_(1, targets.view(-1, 1), 1) #Apple Silicon support
+            # labels_ = torch.zeros(batch_size, 10).scatter_(1, targets.view(-1, 1), 1) 
+            labels_ =  labels_.to(device) #Apple Silicon support
+            # loss = criterion(outputs.cpu(), labels_)
+            loss = criterion(outputs, labels_)
+            # _, predicted = outputs.cpu().max(1)
+            _, predicted = outputs.max(1) #Apple Silicon support
             total += float(targets.size(0))
             correct += float(predicted.eq(targets).sum().item())
             if batch_idx %100 ==0:
