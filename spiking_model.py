@@ -49,6 +49,45 @@ def lr_scheduler(optimizer, epoch, init_lr=0.1, lr_decay_epoch=50):
             param_group['lr'] = param_group['lr'] * 0.1
     return optimizer
 
+class SMLP(nn.Module):
+    """
+    784-400-10 spiking MLP (fully connected).
+    Uses  existing act_fun (surrogate spike) and mem_update (LIF update).
+    """
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(28*28, 400)   # 784 -> 400
+        self.fc2 = nn.Linear(400, 10)      # 400 -> 10
+
+    def forward(self, input, time_window=20):
+        # input: [B, 1, 28, 28] with values in [0,1]
+        B = input.size(0)
+
+        # Membrane and spike states
+        h1_mem = torch.zeros(B, 400, device=device)
+        h1_spike = torch.zeros(B, 400, device=device)
+        h1_sumspike = torch.zeros(B, 400, device=device)
+
+        h2_mem = torch.zeros(B, 10, device=device)
+        h2_spike = torch.zeros(B, 10, device=device)
+        h2_sumspike = torch.zeros(B, 10, device=device)
+
+        for _ in range(time_window):
+            # Poisson/Bernoulli spike encoding from static image
+            x = (input > torch.rand_like(input)).float()   # [B,1,28,28]
+            x = x.view(B, -1)                              # flatten to [B,784]
+
+            # LIF updates through fully connected layers
+            h1_mem, h1_spike = mem_update(self.fc1, x, h1_mem, h1_spike)
+            h1_sumspike += h1_spike
+
+            h2_mem, h2_spike = mem_update(self.fc2, h1_spike, h2_mem, h2_spike)
+            h2_sumspike += h2_spike
+
+        outputs = h2_sumspike / time_window   # rate-coded outputs
+        return outputs
+
+
 class SCNN(nn.Module):
     def __init__(self):
         super(SCNN, self).__init__()

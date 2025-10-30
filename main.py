@@ -13,17 +13,19 @@ import torchvision
 import torchvision.transforms as transforms
 import os
 import time
+import data_setup
 from spiking_model import*
 # os.environ['CUDA_VISIBLE_DEVICES'] = "3"
-names = 'spiking_model'
-data_path =  './raw/' #todo: input your data path
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = "mps" if torch.backends.mps.is_available() else "cpu" #Apple Silicon support
-train_dataset = torchvision.datasets.MNIST(root= data_path, train=True, download=True, transform=transforms.ToTensor())
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
 
-test_set = torchvision.datasets.MNIST(root= data_path, train=False, download=True,  transform=transforms.ToTensor())
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=0)
+names = 'spiking_model'
+device = data_setup.get_device()
+
+train_dataset = data_setup.get_train_dataset(data_path="./raw/")
+train_loader = data_setup.get_train_loader(batch_size=100, data_path="./raw/")
+
+test_set = data_setup.get_test_dataset(data_path="./raw/") 
+test_loader = data_setup.get_test_loader(batch_size=100, data_path="./raw/")
+
 
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -31,7 +33,8 @@ acc_record = list([])
 loss_train_record = list([])
 loss_test_record = list([])
 
-snn = SCNN()
+# snn = SCNN()
+snn = SMLP()
 snn.to(device)
 criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(snn.parameters(), lr=learning_rate)
