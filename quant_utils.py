@@ -181,3 +181,40 @@ def run_quant_sweep(base_model, test_loader, device,
     print(best.sort_values("acc", ascending=False).head(10).to_string(index=False))
 
     return df
+
+
+def quantize_membrane_potential(mem: torch.Tensor,
+                               m: int, n: int,
+                               rounding: str = "nearest",
+                               overflow: str = "saturate") -> torch.Tensor:
+    """
+    Quantize membrane potential during forward pass.
+    Same as quantize_tensor_fixed but without @torch.inference_mode()
+    since we need gradients during training (if doing QAT).
+    """
+    if m < 0 or n < 0:
+        raise ValueError(f"Invalid Qm.n: m={m}, n={n}.")
+
+    qmin_int = -(1 << (m + n))
+    qmax_int = (1 << (m + n)) - 1
+    scale = float(1 << n)
+
+    mem_scaled = mem * scale
+
+    if rounding == "nearest":
+        q = torch.round(mem_scaled)
+    elif rounding == "floor":
+        q = torch.floor(mem_scaled)
+    elif rounding == "stochastic":
+        frac = torch.frac(mem_scaled)
+        q = torch.floor(mem_scaled) + (torch.rand_like(mem_scaled) < frac).to(mem_scaled.dtype)
+    else:
+        q = torch.round(mem_scaled)  # Default to nearest
+
+    if overflow == "saturate":
+        q = torch.clamp(q, qmin_int, qmax_int)
+    elif overflow == "wrap":
+        span = qmax_int - qmin_int + 1
+        q = (q - qmin_int) % span + qmin_int
+
+    return q / scale

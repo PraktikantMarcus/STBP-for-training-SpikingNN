@@ -87,6 +87,72 @@ class SMLP(nn.Module):
         outputs = h2_sumspike / time_window   # rate-coded outputs
         return outputs
 
+class SMLP_MemQuant(nn.Module):
+    """
+    SMLP with configurable membrane potential quantization.
+    """
+    def __init__(self, 
+                 quant_mem: bool = False,
+                 mem_m: int = 2, 
+                 mem_n: int = 4,
+                 mem_rounding: str = "nearest",
+                 mem_overflow: str = "saturate"):
+        super().__init__()
+        self.fc1 = nn.Linear(28*28, 400)
+        self.fc2 = nn.Linear(400, 10)
+        
+        # Membrane quantization config
+        self.quant_mem = quant_mem
+        self.mem_m = mem_m
+        self.mem_n = mem_n
+        self.mem_rounding = mem_rounding
+        self.mem_overflow = mem_overflow
+
+    def forward(self, input, time_window=20):
+        B = input.size(0)
+
+        # Membrane and spike states
+        h1_mem = torch.zeros(B, 400, device=device)
+        h1_spike = torch.zeros(B, 400, device=device)
+        h1_sumspike = torch.zeros(B, 400, device=device)
+
+        h2_mem = torch.zeros(B, 10, device=device)
+        h2_spike = torch.zeros(B, 10, device=device)
+        h2_sumspike = torch.zeros(B, 10, device=device)
+
+        for _ in range(time_window):
+            x = (input > torch.rand_like(input)).float()
+            x = x.view(B, -1)
+
+            # Layer 1 update
+            h1_mem, h1_spike = mem_update(self.fc1, x, h1_mem, h1_spike)
+            
+            # Quantize membrane potential if enabled
+            if self.quant_mem:
+                from quant_utils import quantize_membrane_potential
+                h1_mem = quantize_membrane_potential(
+                    h1_mem, self.mem_m, self.mem_n, 
+                    self.mem_rounding, self.mem_overflow
+                )
+            
+            h1_sumspike += h1_spike
+
+            # Layer 2 update
+            h2_mem, h2_spike = mem_update(self.fc2, h1_spike, h2_mem, h2_spike)
+            
+            # Quantize membrane potential if enabled
+            if self.quant_mem:
+                from quant_utils import quantize_membrane_potential
+                h2_mem = quantize_membrane_potential(
+                    h2_mem, self.mem_m, self.mem_n,
+                    self.mem_rounding, self.mem_overflow
+                )
+            
+            h2_sumspike += h2_spike
+
+        outputs = h2_sumspike / time_window
+        return outputs
+
 
 class SCNN(nn.Module):
     def __init__(self):
