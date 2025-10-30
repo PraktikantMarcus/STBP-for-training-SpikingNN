@@ -25,16 +25,16 @@ def quantize_tensor_fixed(x: torch.Tensor,
     # qmax = (1 << m) - 1     # 2^m - 1
    
     # NEW (CORRECT):
-    # qmin = -(1 << (m + n))      # -2^(m+n)
-    # qmax = (1 << (m + n)) - 1   # 2^(m+n) - 1
+    qmin = -(1 << (m + n))      # -2^(m+n)
+    qmax = (1 << (m + n)) - 1   # 2^(m+n) - 1
     
     # test_qmin = -(1 << m)
     # test_qmax = (1 << m) - (1.0 / (1 << n))
     # print(f"The range for Q{m}.{n} is: [{test_qmin}, {test_qmax}]")
 
     # MINE 
-    qmin = -(1 << m) 
-    qmax = (1 << m) - (1.0 / (1 << n))
+    # qmin = -(1 << m) 
+    # qmax = (1 << m) - (1.0 / (1 << n))
     
     scale = float(1 << n)   # 2^n
 
@@ -57,7 +57,7 @@ def quantize_tensor_fixed(x: torch.Tensor,
     if overflow == "saturate":
         q = torch.clamp(q, qmin, qmax)
     elif overflow == "wrap":
-        span = qmax - qmin  # +1 for inclusive range (i dont think we need this here)
+        span = qmax - qmin   +1 #for inclusive range 
         q = (q - qmin) % span + qmin
     else:
         raise ValueError(f"Unknown overflow: {overflow}")
@@ -137,7 +137,7 @@ def run_quant_sweep(base_model, test_loader, device,
         for rnd in roundings:
             for ovf in overflows:
                 model_q = copy.deepcopy(base_model).to(device).eval()
-                torch.manual_seed(0)  # reproducible stochastic rounding
+                #torch.manual_seed(0)  # reproducible stochastic rounding
                 quantize_model_weights_(model_q, m, n, rounding=rnd, overflow=ovf, which=which)
                 acc = evaluate_accuracy(model_q, test_loader, device)
                 rows.append({"m": m, "n": n, "rounding": rnd, "overflow": ovf,

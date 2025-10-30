@@ -7,8 +7,38 @@ matplotlib.use("Agg")  # non-GUI backend for scripts
 import matplotlib.pyplot as plt
 
 # Define colors for different m values
-colors = {0: 'blue', 1: 'green', 2: 'red', 3: 'orange', 4: 'purple', 
-          5: 'brown', 6: 'pink', 7: 'gray', 8: 'olive', 9: 'cyan'}
+colors = {0: 'blue',
+          1: 'green', 
+          2: 'red',
+          3: 'orange',
+          4: 'purple',
+          5: 'brown',
+          6: 'pink',
+          7: 'gray',
+          8: 'olive',
+          9: 'cyan'}
+
+markers = {0: 'o',      # Circle
+           1: 's',      # Square
+           2: '^',      # Triangle up
+           3: 'D',      # Diamond
+           4: 'v',      # Triangle down
+           5: 'p',      # Pentagon
+           6: '*',      # Star
+           7: 'X',      # X (filled)
+           8: 'P',      # Plus (filled)
+           9: 'h'}      # Hexagon
+
+linestyles = {0: '-',       # Solid
+              1: '--',      # Dashed
+              2: '-.',      # Dash-dot
+              3: ':',       # Dotted
+              4: '-',       # Solid (repeat)
+              5: '--',      # Dashed (repeat)
+              6: '-.',      # Dash-dot (repeat)
+              7: ':',       # Dotted (repeat)
+              8: '-',       # Solid (repeat)
+              9: '--'}      # Dashed (repeat)
 
 def main():
     parser = argparse.ArgumentParser(description="Plot accuracy vs n with m=2 for each rounding/overflow from a quantization CSV.")
@@ -97,15 +127,20 @@ def main():
                 plt.grid(True, linestyle="--", alpha=0.4)
                 
                 # Plot one line for each m value
-                for m_val in sorted(df["m"].unique()):
+                for m_val in range(args.min_m, args.max_m +1):
                     # Filter data for this specific combination
                     mask = (df["rounding"] == rnd) & (df["overflow"] == ovf) & (df["m"] == m_val)
                     subset = df[mask].sort_values("n")  # Sort by n for proper line plotting
                     
                     if len(subset) > 0:  # Only plot if data exists
                         plt.plot(subset["n"], subset["acc"], 
-                                marker="o", label=f"m={m_val}", 
-                                color=colors.get(m_val, 'black'))
+                            marker=markers.get(m_val, 'o'),          # Different marker per m
+                            linestyle=linestyles.get(m_val, '-'),    # Different line style per m
+                            label=f"m={m_val}", 
+                            color=colors.get(m_val, 'black'),
+                            linewidth=2.5,
+                            markersize=8,
+                            alpha=0.85)
                         print(f"  Plotted: m={m_val}, {len(subset)} points")
                 
                 plt.legend()

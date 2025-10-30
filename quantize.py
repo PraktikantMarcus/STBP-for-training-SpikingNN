@@ -13,5 +13,5 @@ snn.load_state_dict(ckpt["net"])
 snn.eval()
 
 # Run sweep
-df_results = run_quant_sweep(snn, test_loader, device,max_m=4, max_n=8)
+df_results = run_quant_sweep(snn, test_loader, device,max_m=2, max_n=8)
 print("Saved quant CSV and plot")

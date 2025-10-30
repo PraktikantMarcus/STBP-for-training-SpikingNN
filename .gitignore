@@ -102,6 +102,13 @@ Desktop.ini
 *.BMP
 *.SVG
 
+# CSV-files
+*.CSV
+*.csv
+
+#Data directories 
+raw/
+
 # Image directories (optional - uncomment if needed)
 # images/
 # img/
