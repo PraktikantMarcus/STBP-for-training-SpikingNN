@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from quant_utils import quantize_membrane_potential
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = "mps" if torch.backends.mps.is_available() else "cpu" #Apple Silicon support
@@ -11,6 +12,7 @@ num_classes = 10
 batch_size  = 100
 learning_rate = 1e-3
 num_epochs = 100 # max epoch
+
 # define approximate firing function
 class ActFun(torch.autograd.Function):
 
@@ -27,10 +29,33 @@ class ActFun(torch.autograd.Function):
         return grad_input * temp.float()
 
 act_fun = ActFun.apply
+
 # membrane potential update
 def mem_update(ops, x, mem, spike):
     mem = mem * decay * (1. - spike) + ops(x)
     spike = act_fun(mem) # act_fun : approximation firing function
+    return mem, spike
+
+# membrane potential update but quantized
+def mem_update_quantized(ops, x, mem, spike, 
+                         mem_m, mem_n, 
+                         rounding="nearest", 
+                         overflow="saturate"):
+    """
+    Membrane update with quantization BEFORE spike generation.
+    This ensures spikes are based on quantized membrane values.
+    """
+    from spiking_model import act_fun
+    
+    # Compute new membrane
+    mem = mem * decay * (1. - spike) + ops(x)
+    
+    # QUANTIZE BEFORE SPIKE DECISION!
+    mem = quantize_membrane_potential(mem, mem_m, mem_n, rounding, overflow)
+    
+    # Now generate spike from quantized membrane
+    spike = act_fun(mem)
+    
     return mem, spike
 
 # cnn_layer(in_planes, out_planes, stride, padding, kernel_size)
@@ -88,9 +113,8 @@ class SMLP(nn.Module):
         return outputs
 
 class SMLP_MemQuant(nn.Module):
-    """
-    SMLP with configurable membrane potential quantization.
-    """
+    """SMLP with membrane quantization - FIXED VERSION."""
+    
     def __init__(self, 
                  quant_mem: bool = False,
                  mem_m: int = 2, 
@@ -101,7 +125,6 @@ class SMLP_MemQuant(nn.Module):
         self.fc1 = nn.Linear(28*28, 400)
         self.fc2 = nn.Linear(400, 10)
         
-        # Membrane quantization config
         self.quant_mem = quant_mem
         self.mem_m = mem_m
         self.mem_n = mem_n
@@ -111,7 +134,6 @@ class SMLP_MemQuant(nn.Module):
     def forward(self, input, time_window=20):
         B = input.size(0)
 
-        # Membrane and spike states
         h1_mem = torch.zeros(B, 400, device=device)
         h1_spike = torch.zeros(B, 400, device=device)
         h1_sumspike = torch.zeros(B, 400, device=device)
@@ -125,34 +147,33 @@ class SMLP_MemQuant(nn.Module):
             x = x.view(B, -1)
 
             # Layer 1 update
-            h1_mem, h1_spike = mem_update(self.fc1, x, h1_mem, h1_spike)
-            
-            # Quantize membrane potential if enabled
             if self.quant_mem:
-                from quant_utils import quantize_membrane_potential
-                h1_mem = quantize_membrane_potential(
-                    h1_mem, self.mem_m, self.mem_n, 
+                # Use quantized mem_update
+                h1_mem, h1_spike = mem_update_quantized(
+                    self.fc1, x, h1_mem, h1_spike,
+                    self.mem_m, self.mem_n,
                     self.mem_rounding, self.mem_overflow
                 )
+            else:
+                # Standard full-precision update
+                h1_mem, h1_spike = mem_update(self.fc1, x, h1_mem, h1_spike)
             
             h1_sumspike += h1_spike
 
             # Layer 2 update
-            h2_mem, h2_spike = mem_update(self.fc2, h1_spike, h2_mem, h2_spike)
-            
-            # Quantize membrane potential if enabled
             if self.quant_mem:
-                from quant_utils import quantize_membrane_potential
-                h2_mem = quantize_membrane_potential(
-                    h2_mem, self.mem_m, self.mem_n,
+                h2_mem, h2_spike = mem_update_quantized(
+                    self.fc2, h1_spike, h2_mem, h2_spike,
+                    self.mem_m, self.mem_n,
                     self.mem_rounding, self.mem_overflow
                 )
+            else:
+                h2_mem, h2_spike = mem_update(self.fc2, h1_spike, h2_mem, h2_spike)
             
             h2_sumspike += h2_spike
 
         outputs = h2_sumspike / time_window
         return outputs
-
 
 class SCNN(nn.Module):
     def __init__(self):

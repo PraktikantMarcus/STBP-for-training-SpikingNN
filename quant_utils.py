@@ -20,22 +20,10 @@ def quantize_tensor_fixed(x: torch.Tensor,
     if m < 0 or n < 0:
         raise ValueError(f"Invalid Qm.n: m={m}, n={n}. Need m>=0, n>=0 (TI-Format).")
 
-    # OLD (INCORRECT):
-    # qmin = -(1 << m)        # -2^m
-    # qmax = (1 << m) - 1     # 2^m - 1
-   
-    # NEW (CORRECT):
     qmin = -(1 << (m + n))      # -2^(m+n)
     qmax = (1 << (m + n)) - 1   # 2^(m+n) - 1
     
-    # test_qmin = -(1 << m)
-    # test_qmax = (1 << m) - (1.0 / (1 << n))
-    # print(f"The range for Q{m}.{n} is: [{test_qmin}, {test_qmax}]")
 
-    # MINE 
-    # qmin = -(1 << m) 
-    # qmax = (1 << m) - (1.0 / (1 << n))
-    
     scale = float(1 << n)   # 2^n
 
     x_scaled = x * scale
@@ -64,7 +52,6 @@ def quantize_tensor_fixed(x: torch.Tensor,
 
     return q / scale
 
-
 @torch.inference_mode()
 def quantize_model_weights_(model: torch.nn.Module,
                             m: int, n: int,
@@ -78,7 +65,6 @@ def quantize_model_weights_(model: torch.nn.Module,
     for name, p in model.named_parameters():
         if which in name:
             p.copy_(quantize_tensor_fixed(p, m, n, rounding, overflow))
-
 
 @torch.inference_mode()
 def evaluate_accuracy(model: torch.nn.Module,
@@ -94,7 +80,6 @@ def evaluate_accuracy(model: torch.nn.Module,
         correct += (pred == targets).sum().item()
     return 100.0 * correct / total
 
-
 def qmn_grid (min_m: int = 0, min_n: int = 0, max_m: int = None, max_n: int = None):
     """
     Build all Qm.n pairs within given ranges.
@@ -105,8 +90,6 @@ def qmn_grid (min_m: int = 0, min_n: int = 0, max_m: int = None, max_n: int = No
             pairs.append((m, n))
     return pairs
     
-
-
 def run_quant_sweep(base_model, test_loader, device,
                     roundings=("nearest", "ceil", "floor", "trunc", "stochastic"),
                     overflows=("saturate", "wrap"),
@@ -137,7 +120,7 @@ def run_quant_sweep(base_model, test_loader, device,
         for rnd in roundings:
             for ovf in overflows:
                 model_q = copy.deepcopy(base_model).to(device).eval()
-                #torch.manual_seed(0)  # reproducible stochastic rounding
+                torch.manual_seed(0)  # reproducible stochastic rounding
                 quantize_model_weights_(model_q, m, n, rounding=rnd, overflow=ovf, which=which)
                 acc = evaluate_accuracy(model_q, test_loader, device)
                 rows.append({"m": m, "n": n, "rounding": rnd, "overflow": ovf,
@@ -195,6 +178,7 @@ def quantize_membrane_potential(mem: torch.Tensor,
     if m < 0 or n < 0:
         raise ValueError(f"Invalid Qm.n: m={m}, n={n}.")
 
+
     qmin_int = -(1 << (m + n))
     qmax_int = (1 << (m + n)) - 1
     scale = float(1 << n)
@@ -205,11 +189,16 @@ def quantize_membrane_potential(mem: torch.Tensor,
         q = torch.round(mem_scaled)
     elif rounding == "floor":
         q = torch.floor(mem_scaled)
+    elif rounding == "ceil":
+        q = torch.ceil(mem_scaled)
+    elif rounding == "trunc":
+        q = torch.trunc(mem_scaled)
     elif rounding == "stochastic":
         frac = torch.frac(mem_scaled)
         q = torch.floor(mem_scaled) + (torch.rand_like(mem_scaled) < frac).to(mem_scaled.dtype)
     else:
         q = torch.round(mem_scaled)  # Default to nearest
+
 
     if overflow == "saturate":
         q = torch.clamp(q, qmin_int, qmax_int)
@@ -217,4 +206,7 @@ def quantize_membrane_potential(mem: torch.Tensor,
         span = qmax_int - qmin_int + 1
         q = (q - qmin_int) % span + qmin_int
 
-    return q / scale
+    result = q / scale
+    
+    return result
+
