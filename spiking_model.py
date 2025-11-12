@@ -175,6 +175,111 @@ class SMLP_MemQuant(nn.Module):
         outputs = h2_sumspike / time_window
         return outputs
 
+class Event_SMLP(nn.Module):
+
+    def __init__(self, 
+                 quant_mem: bool = False,
+                 mem_m: int = 2, 
+                 mem_n: int = 4,
+                 mem_rounding: str = "nearest",
+                 mem_overflow: str = "saturate"):
+        super().__init__()
+        self.fc1 = nn.Linear(28*28, 400)
+        self.fc2 = nn.Linear(400, 10)
+        
+        self.quant_mem = quant_mem
+        self.mem_m = mem_m
+        self.mem_n = mem_n
+        self.mem_rounding = mem_rounding
+        self.mem_overflow = mem_overflow
+        self.register_buffer("h1_mem",torch.zeros(400))
+        self.register_buffer("h2_mem",torch.zeros(10))
+        self.register_buffer("input_vec",torch.zeros(784))
+
+    def reset_state(self):
+        self.h1_mem = torch.zeros(400, device=device)  
+        self.h2_mem = torch.zeros(10, device=device)
+
+    def forward(self, input, time_window=20):
+        """
+        Forward pass for batched inference.
+        Processes each sample in the batch independently using event-driven dynamics.
+        
+        Args:
+            input: (B, 1, 28, 28) tensor
+            time_window: number of timesteps
+            
+        Returns:
+            outputs: (B, 10) rate-coded output
+        """
+        B = input.size(0)
+        outputs = torch.zeros(B, 10, device=device)
+        
+        # Process each sample in the batch independently
+        for b in range(B):
+            self.reset_state()
+            sample = input[b]  # (1, 28, 28)
+            h2_sumspike = torch.zeros(10, device=device)
+            
+            for t in range(time_window):
+                # Poisson/Bernoulli spike encoding
+                x = (sample > torch.rand_like(sample)).float()
+                self.input_vec = x.view(-1)  # Flatten to (784,)
+                
+                # Process one timestep with event-driven dynamics
+                h2_spike, _, _ = self.process_time_step_collect_extrema()
+                h2_sumspike += h2_spike
+            
+            outputs[b] = h2_sumspike / time_window
+        
+        return outputs
+
+    def process_time_step_collect_extrema(self) -> tuple[torch.Tensor, float, float]:
+        """
+        Use the current `self.input_vec` (shape [784], values {0,1}) to process one step.
+
+        Returns:
+            h2_spiked: (OUT,) output spike vector at end of step.
+            step_max: float, max membrane among {hidden, output} pre-fire snapshots in this step.
+            step_min: float, min membrane among {hidden, output} pre-fire snapshots in this step.
+        """
+        step_max = -float("inf")
+        step_min = +float("inf")
+
+        # 1) Hidden accumulation from input spikes — update extrema BEFORE hidden fires
+        for idx in torch.nonzero(self.input_vec, as_tuple=False).flatten():
+            self.h1_mem += self.fc1.weight[:, idx]
+            h1_max = self.h1_mem.max().item()
+            h1_min = self.h1_mem.min().item()
+            if h1_max > step_max:
+                step_max = h1_max
+            if h1_min < step_min:
+                step_min = h1_min
+
+        # Hidden threshold & reset
+        h1_spiked = act_fun(self.h1_mem)
+        self.h1_mem[h1_spiked.bool()] = 0.0
+
+        # 2) Output accumulation from hidden spikes — update extrema BEFORE output fires
+        for h in torch.nonzero(h1_spiked, as_tuple=False).flatten():
+            self.h2_mem += self.fc2.weight[:, h]
+            h2_max = self.h2_mem.max().item()
+            h2_min = self.h2_mem.min().item()
+            if h2_max > step_max:
+                step_max = h2_max
+            if h2_min < step_min:
+                step_min = h2_min
+
+        # Output threshold & reset
+        h2_spiked = act_fun(self.h2_mem)
+        self.h2_mem[h2_spiked.bool()] = 0.0
+
+        # Decay after both layers processed
+        self.h1_mem *= decay
+        self.h2_mem *= decay
+
+        return h2_spiked, step_max, step_min
+
 class SCNN(nn.Module):
     def __init__(self):
         super(SCNN, self).__init__()
@@ -212,5 +317,4 @@ class SCNN(nn.Module):
 
         outputs = h2_sumspike / time_window
         return outputs
-
 
