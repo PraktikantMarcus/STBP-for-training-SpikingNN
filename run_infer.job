@@ -1,0 +1,54 @@
+#!/bin/bash
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --gpus=1
+#SBATCH --mem-per-gpu=50G
+#SBATCH --time=0-01:00
+#SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
+#SBATCH --mail-type=ALL
+#SBATCH --output=slurm-%j.out
+
+echo "=========================================="
+echo "Job started on $(date)"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Running on node: $(hostname)"
+echo "=========================================="
+
+# USE EXPLICIT PATH - don't rely on activation
+PYTHON="/home/fritzsche6/.conda/envs/torch312/bin/python"
+
+echo "Python version:"
+$PYTHON --version
+echo ""
+
+echo "PyTorch version:"
+$PYTHON -c "import torch; print(f'PyTorch: {torch.__version__}')"
+echo "CUDA available:" 
+$PYTHON -c "import torch; print(torch.cuda.is_available())"
+echo ""
+
+echo "Working directory: $(pwd)"
+echo ""
+
+# Verify all imports work
+echo "Checking imports..."
+$PYTHON << 'EOF'
+import torch
+import matplotlib
+import numpy
+print(f"✓ torch: {torch.__version__}")
+print(f"✓ matplotlib: {matplotlib.__version__}")
+print(f"✓ numpy: {numpy.__version__}")
+EOF
+
+# Run the inference script
+echo ""
+echo "Starting inference..."
+$PYTHON infer.py
+
+echo ""
+echo "=========================================="
+echo "Job finished on $(date)"
+echo "=========================================="

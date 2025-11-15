@@ -14,7 +14,7 @@ device = data_setup.get_device()
 test_loader = data_setup.get_test_loader(batch_size=100, data_path="./raw/")
 
 # Recreate the model architecture
-snn = Event_SMLP().to(device)          # must match the class & layers used in training
+snn = Event_SMLP(track_extrema=False).to(device)  
 
 
 
@@ -25,7 +25,7 @@ snn.eval()  # Set the model to evaluation mode
 
 correct = 0
 total = 0
-max_images = 100  # Limit to 100 images for faster testing, can only be a multiple of 100
+max_images = 10000  # Limit to 100 images for faster testing, can only be a multiple of 100
 
 with torch.inference_mode():
     for inputs, targets in test_loader:
@@ -36,6 +36,7 @@ with torch.inference_mode():
         total += targets.numel()
         correct += (predicted == targets).sum().item()
         
+        print(f"Images processed: {total}")
         # Stop after processing max_images
         if total >= max_images:
             break

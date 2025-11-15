@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from quant_utils import quantize_membrane_potential
+import data_setup
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = "mps" if torch.backends.mps.is_available() else "cpu" #Apple Silicon support
+device = data_setup.get_device()
 thresh = 0.5 # neuronal threshold
 lens = 0.5 # hyper-parameters of approximate function
 decay = 0.2 # decay constants
@@ -182,10 +183,12 @@ class Event_SMLP(nn.Module):
                  mem_m: int = 2, 
                  mem_n: int = 4,
                  mem_rounding: str = "nearest",
-                 mem_overflow: str = "saturate"):
+                 mem_overflow: str = "saturate",
+                 track_extrema=False, **kwargs):
         super().__init__()
         self.fc1 = nn.Linear(28*28, 400)
         self.fc2 = nn.Linear(400, 10)
+        self.track_extrema = track_extrema
         
         self.quant_mem = quant_mem
         self.mem_m = mem_m
@@ -201,38 +204,50 @@ class Event_SMLP(nn.Module):
         self.h2_mem = torch.zeros(10, device=device)
 
     def forward(self, input, time_window=20):
-        """
-        Forward pass for batched inference.
-        Processes each sample in the batch independently using event-driven dynamics.
-        
-        Args:
-            input: (B, 1, 28, 28) tensor
-            time_window: number of timesteps
-            
-        Returns:
-            outputs: (B, 10) rate-coded output
-        """
         B = input.size(0)
-        outputs = torch.zeros(B, 10, device=device)
+        outputs = torch.zeros(B, 10, device=input.device)
         
-        # Process each sample in the batch independently
         for b in range(B):
             self.reset_state()
-            sample = input[b]  # (1, 28, 28)
-            h2_sumspike = torch.zeros(10, device=device)
+            sample = input[b]
+            h2_sumspike = torch.zeros(10, device=input.device)
             
             for t in range(time_window):
-                # Poisson/Bernoulli spike encoding
                 x = (sample > torch.rand_like(sample)).float()
-                self.input_vec = x.view(-1)  # Flatten to (784,)
+                self.input_vec = x.view(-1)
                 
-                # Process one timestep with event-driven dynamics
-                h2_spike, _, _ = self.process_time_step_collect_extrema()
+                if self.track_extrema:
+                    h2_spike, _, _ = self.process_time_step_collect_extrema()
+                else:
+                    h2_spike = self.process_time_step_fast()  
+                
                 h2_sumspike += h2_spike
             
             outputs[b] = h2_sumspike / time_window
         
         return outputs
+
+    def process_time_step_fast(self):
+        """Fast version without extrema tracking."""
+        # Hidden layer
+        for idx in torch.nonzero(self.input_vec, as_tuple=False).flatten():
+            self.h1_mem += self.fc1.weight[:, idx]
+        
+        h1_spiked = act_fun(self.h1_mem)
+        self.h1_mem[h1_spiked.bool()] = 0.0
+        
+        # Output layer
+        for h in torch.nonzero(h1_spiked, as_tuple=False).flatten():
+            self.h2_mem += self.fc2.weight[:, h]
+        
+        h2_spiked = act_fun(self.h2_mem)
+        self.h2_mem[h2_spiked.bool()] = 0.0
+        
+        # Decay
+        self.h1_mem *= decay
+        self.h2_mem *= decay
+        
+        return h2_spiked
 
     def process_time_step_collect_extrema(self) -> tuple[torch.Tensor, float, float]:
         """
