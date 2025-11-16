@@ -24,12 +24,12 @@ def process_batch(args):
     Returns:
         tuple of (predictions, labels)
     """
-    images, labels, model_state_dict, time_window, rnd, ovf = args
+    images, labels, model_state_dict, time_window, m, n, rnd, ovf = args
     
     # Create model in this worker process
     model = Event_SMLP_Quantized(True,
-                                 6,
-                                 8,
+                                 m,
+                                 n,
                                  rnd,
                                  ovf,
                                  False)
@@ -50,9 +50,9 @@ def process_batch(args):
     
     return predictions, labels.tolist()
 
-def run_inference(rnd = "nearest", ovf="saturate"):
+def run_inference(m, n, rnd="nearest", ovf="saturate"):
     print("=" * 80)
-    print(f"Running multicore, event-driven inference with '{rnd}'- and '{ovf}'-mechanics ")
+    print(f"Running Q{m}.{n} with '{rnd}' rounding and '{ovf}' overflow")
     print("=" * 80)
 
     # Configuration
@@ -102,7 +102,7 @@ def run_inference(rnd = "nearest", ovf="saturate"):
     print(f"Starting inference with {num_workers} workers...")
     worker_args = []
     for images, labels in test_loader:
-        worker_args.append((images, labels, model_state, time_window, rnd, ovf))
+        worker_args.append((images, labels, model_state, time_window, m, n, rnd, ovf))
 
     # Create process pool and process batches
     start_time = time.time()
@@ -145,7 +145,7 @@ def run_inference(rnd = "nearest", ovf="saturate"):
     print(f"Time per sample:    {elapsed_time/total*1000:.1f}ms")
     print(f"Throughput:         {total/elapsed_time:.1f} samples/sec")
     print("=" * 70)
-    
+
     # Compare with checkpoint accuracy
     if 'acc' in checkpoint:
         ckpt_acc = checkpoint['acc']
@@ -153,15 +153,86 @@ def run_inference(rnd = "nearest", ovf="saturate"):
         print(f"Inference accuracy:  {accuracy:.3f}%")
         print(f"Difference:          {abs(accuracy - ckpt_acc):.3f}%")
 
+    # Return results for collection
+    return {
+        'm': m,
+        'n': n,
+        'rnd': rnd,
+        'ovf': ovf,
+        'accuracy': accuracy,
+        'total_samples': total,
+        'correct': correct,
+        'elapsed_time': elapsed_time,
+        'throughput': total/elapsed_time
+    }
 def main():
     parser = argparse.ArgumentParser(description="Run multicore, fully-quantized inference. Using specific rounding and overflow mechanics for membrane quantization")
     parser.add_argument("--rnd", help="Select valid rounding mechanics: floor, ceil, trunc, nearest, stochastic")
     parser.add_argument("--ovf", help="Select valid overflow mechanics: saturate, wrap")
+    parser.add_argument("--m_max", type=int, default=5, help="Maximum value for m in Qm.n (default: 5)")
+    parser.add_argument("--n_max", type=int, default=8, help="Maximum value for n in Qm.n (default: 8)")
+    parser.add_argument("--m_min", type=int, default=0, help="Minimum value for m in Qm.n (default: 0)")
+    parser.add_argument("--n_min", type=int, default=0, help="Minimum value for n in Qm.n (default: 0)")
+    parser.add_argument("--output", type=str, default="quantization_results.csv", help="Output CSV file for results")
+
 
     args = parser.parse_args()
-    print("Running, import working")
+    print("Starting quantization parameter sweep...")
+    print(f"m range: [{args.m_min}, {args.m_max}]")
+    print(f"n range: [{args.n_min}, {args.n_max}]")
+    print(f"Rounding: {args.rnd}, Overflow: {args.ovf}")
+    print()
+
     mp.set_start_method('spawn', force=True)
-    run_inference(args.rnd, args.ovf)
+
+    # Collect results for all configurations
+    all_results = []
+    total_configs = (args.m_max - args.m_min + 1) * (args.n_max - args.n_min + 1)
+    current_config = 0
+
+    # Iterate over all m and n combinations
+    for m in range(args.m_min, args.m_max + 1):
+        for n in range(args.n_min, args.n_max + 1):
+            current_config += 1
+            print(f"\n{'='*80}")
+            print(f"Configuration {current_config}/{total_configs}: Q{m}.{n}")
+            print(f"{'='*80}\n")
+            
+            result = run_inference(m, n, args.rnd, args.ovf)
+            all_results.append(result)
+            print()
+    
+    # Create DataFrame with results
+    df = pd.DataFrame(all_results)
+    
+    # Sort by accuracy descending
+    df = df.sort_values('accuracy', ascending=False)
+    
+    # Save to CSV
+    output_path = args.output
+    df.to_csv(output_path, index=False)
+    print(f"\n{'='*80}")
+    print(f"Results saved to: {output_path}")
+    print(f"{'='*80}\n")
+    
+    # Print summary
+    print("\nTop 10 Configurations by Accuracy:")
+    print("="*80)
+    print(df[['m', 'n', 'accuracy', 'throughput']].head(10).to_string(index=False))
+    print()
+    
+    print("\nBottom 5 Configurations by Accuracy:")
+    print("="*80)
+    print(df[['m', 'n', 'accuracy', 'throughput']].tail(5).to_string(index=False))
+    print()
+    
+    # Find best configuration
+    best = df.iloc[0]
+    print(f"\nBest Configuration:")
+    print(f"  Q{int(best['m'])}.{int(best['n'])} - Accuracy: {best['accuracy']:.3f}%")
+    print(f"  Throughput: {best['throughput']:.1f} samples/sec")
+    print(f"  Time: {best['elapsed_time']:.1f}s")
+    print()
 
 if __name__ == '__main__':
     main()

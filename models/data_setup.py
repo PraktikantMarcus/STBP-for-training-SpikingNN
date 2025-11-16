@@ -28,7 +28,7 @@ def get_device():
         return device
     
     # Fallback to CPU
-    print("⚠ Using device: CPU (no GPU detected)")
+    # print("⚠ Using device: CPU (no GPU detected)")
     return torch.device("cpu")
 
 def get_test_loader(batch_size=100, data_path="./raw/"):

@@ -1,0 +1,68 @@
+#!/bin/bash
+#SBATCH --partition=all
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=32G
+#SBATCH --time=01:00:00
+#SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
+#SBATCH --job-name=quant_array
+#SBATCH --output=logs/quant_array_%A_%a.out
+#SBATCH --error=logs/quant_array_%A_%a.err
+#SBATCH --array=0-1
+
+# #SBATCH --array=0-9
+
+# This is a SLURM job array that runs different parameter combinations in parallel
+# Each array task gets a different combination of rounding and overflow methods
+
+source activate torch312
+
+# Environment variables
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+# Define parameter combinations
+# ROUNDING_METHODS=("nearest" "floor" "ceil" "stochastic" "trunc")
+ROUNDING_METHODS=("nearest")
+OVERFLOW_METHODS=("saturate" "wrap")
+
+# Calculate which combination to use based on array task ID
+# Array indices 0-9 map to 5 rounding × 2 overflow = 10 combinations
+NUM_OVERFLOW=${#OVERFLOW_METHODS[@]}
+RND_IDX=$((SLURM_ARRAY_TASK_ID / NUM_OVERFLOW))
+OVF_IDX=$((SLURM_ARRAY_TASK_ID % NUM_OVERFLOW))
+
+ROUNDING=${ROUNDING_METHODS[$RND_IDX]}
+OVERFLOW=${OVERFLOW_METHODS[$OVF_IDX]}
+
+echo "=========================================="
+echo "SLURM Job Array Task"
+echo "=========================================="
+echo "Array Job ID:     $SLURM_ARRAY_JOB_ID"
+echo "Array Task ID:    $SLURM_ARRAY_TASK_ID"
+echo "Job ID:           $SLURM_JOB_ID"
+echo "Node:             $(hostname)"
+echo "CPUs:             $SLURM_CPUS_PER_TASK"
+echo "Rounding:         $ROUNDING"
+echo "Overflow:         $OVERFLOW"
+echo "Start time:       $(date)"
+echo "=========================================="
+echo ""
+
+# Run quantization sweep with specific parameters
+python test_multi_event_quant.py \
+    --rnd "$ROUNDING" \
+    --ovf "$OVERFLOW" \
+    --output "results/results_${ROUNDING}_${OVERFLOW}.csv" \
+    --m_max 1 \
+    --n_max 3
+
+EXIT_CODE=$?
+
+echo ""
+echo "=========================================="
+echo "Job completed at $(date)"
+echo "Exit code: $EXIT_CODE"
+echo "=========================================="
+
+exit $EXIT_CODE
