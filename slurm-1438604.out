@@ -1,0 +1,70 @@
+==========================================
+Job started on Sun Nov 16 03:31:17 PM CET 2025
+Job ID: 1438604
+Running on node: n-hpc-cb1
+==========================================
+/home/fritzsche6/.conda/envs/torch312/bin/python
+/home/fritzsche6/.vscode-server/cli/servers/Stable-ac4cbdf48759c7d8c3eb91ffe6bb04316e263c57/server/bin/remote-cli:/home/fritzsche6/.local/bin:/home/fritzsche6/.conda/envs/torch312/bin:/srv/software/easybuild/software/Anaconda3/2024.02-1/condabin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
+# conda environments:
+#
+torch312              *  /home/fritzsche6/.conda/envs/torch312
+base                     /srv/software/easybuild/software/Anaconda3/2024.02-1
+
+['', '/home/fritzsche6/.conda/envs/torch312/lib/python312.zip', '/home/fritzsche6/.conda/envs/torch312/lib/python3.12', '/home/fritzsche6/.conda/envs/torch312/lib/python3.12/lib-dynload', '/home/fritzsche6/.conda/envs/torch312/lib/python3.12/site-packages']
+Python version:
+
+PyTorch version:
+CUDA available:
+
+Working directory: /work/fritzsche6/STBP-for-training-SpikingNN
+
+Checking imports...
+
+Starting inference...
+⚠ Using device: CPU (no GPU detected)
+Running, import working
+================================================================================
+Running multicore, event-driven inference with 'nearest'- and 'saturate'-mechanics 
+================================================================================
+
+Configuration:
+  CPU cores available: 32
+  Samples per worker task: 100
+  Time window: 20
+
+Loading checkpoint...
+✓ Loaded checkpoint (epoch=95, acc=98.59%)
+Loading test dataset...
+✓ Loaded 10000 test samples
+✓ Split into 100 batches
+
+Starting inference with 32 workers...
+Processing batches:   0%|          | 0/100 [00:00<?, ?batch/s]Processing batches:   1%|          | 1/100 [00:33<55:36, 33.70s/batch]Processing batches:   2%|▏         | 2/100 [00:34<23:35, 14.45s/batch]Processing batches:   5%|▌         | 5/100 [00:34<06:35,  4.16s/batch]Processing batches:   9%|▉         | 9/100 [00:35<02:47,  1.85s/batch]Processing batches:  33%|███▎      | 33/100 [00:58<01:14,  1.11s/batch]Processing batches:  34%|███▍      | 34/100 [00:59<01:12,  1.10s/batch]Processing batches:  36%|███▌      | 36/100 [00:59<01:03,  1.02batch/s]Processing batches:  39%|███▉      | 39/100 [01:00<00:50,  1.21batch/s]Processing batches:  49%|████▉     | 49/100 [01:00<00:21,  2.32batch/s]Processing batches:  51%|█████     | 51/100 [01:02<00:23,  2.07batch/s]Processing batches:  54%|█████▍    | 54/100 [01:02<00:18,  2.45batch/s]Processing batches:  56%|█████▌    | 56/100 [01:03<00:18,  2.40batch/s]Processing batches:  61%|██████    | 61/100 [01:04<00:13,  2.82batch/s]Processing batches:  62%|██████▏   | 62/100 [01:07<00:22,  1.72batch/s]Processing batches:  65%|██████▌   | 65/100 [01:26<01:18,  2.24s/batch]Processing batches:  68%|██████▊   | 68/100 [01:28<00:58,  1.81s/batch]Processing batches:  78%|███████▊  | 78/100 [01:29<00:18,  1.21batch/s]Processing batches:  79%|███████▉  | 79/100 [01:32<00:19,  1.07batch/s]Processing batches:  92%|█████████▏| 92/100 [01:32<00:03,  2.54batch/s]Processing batches:  96%|█████████▌| 96/100 [01:34<00:01,  2.36batch/s]Processing batches:  98%|█████████▊| 98/100 [01:47<00:02,  1.18s/batch]Processing batches: 100%|██████████| 100/100 [01:48<00:00,  1.10s/batch]Processing batches: 100%|██████████| 100/100 [01:48<00:00,  1.08s/batch]
+⚠ Using device: CPU (no GPU detected)
+⚠ Using device: CPU (no GPU detected)
+⚠ Using device: CPU (no GPU detected)
+⚠ Using device: CPU (no GPU detected)
+⚠ Using device: CPU (no GPU detected)
+⚠ Using device: CPU (no GPU detected)
+⚠ Using device: CPU (no GPU detected)
+⚠ Using device: CPU (no GPU detected)
+⚠ Using device: CPU (no GPU detected)
+
+======================================================================
+Results:
+======================================================================
+Total samples:      10000
+Correct:            9838
+Accuracy:           98.380%
+Total time:         108.7s
+Time per sample:    10.9ms
+Throughput:         92.0 samples/sec
+======================================================================
+
+Checkpoint accuracy: 98.59%
+Inference accuracy:  98.380%
+Difference:          0.210%
+
+==========================================
+Job finished on Sun Nov 16 03:33:19 PM CET 2025
+==========================================
