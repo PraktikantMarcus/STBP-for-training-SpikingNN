@@ -1,0 +1,36 @@
+#!/bin/bash
+#SBATCH --partition=all
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=32G
+#SBATCH --time=03:00:00
+#SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
+#SBATCH --job-name=stoch_wrap
+#SBATCH --output=logs/quant_array_%A_%a.out
+#SBATCH --error=logs/quant_array_%A_%a.err
+
+
+echo "=========================================="
+echo "Job started on $(date)"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Running on node: $(hostname)"
+echo "=========================================="
+
+source activate torch312
+
+# Run quantization sweep with specific parameters
+python test_multi_event_quant.py \
+    --rnd stochastic \
+    --ovf wrap \
+    --output "results/results_stochastic_wrap.csv"
+
+EXIT_CODE=$?
+
+echo ""
+echo "=========================================="
+echo "Job completed at $(date)"
+echo "Exit code: $EXIT_CODE"
+echo "=========================================="
+
+exit $EXIT_CODE

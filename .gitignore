@@ -103,8 +103,8 @@ Desktop.ini
 *.SVG
 
 # CSV-files
-*.CSV
-*.csv
+# *.CSV
+# *.csv
 
 #Data directories 
 raw/
