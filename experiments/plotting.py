@@ -69,6 +69,9 @@ def main():
     elif args.type == "mem_and_weights":
         result = combiMemWeightsGraph(max_m = 5, max_n=8)
     
+    elif args.type == "full_event_quant":
+        result = fullEventQuant(max_m = 8, max_n = 8)
+    
     else:
         print(f"ERROR: Unknown plot type: '{args.type}'")
         print(f"Valid types are: combiW, combiM")
@@ -117,6 +120,14 @@ def dataLoader(dataPath: str, dataName :str):
         # Ensure numeric
         df["mem_m"] = df["mem_m"].astype(int)
         df["mem_n"] = df["mem_n"].astype(int)
+
+    elif dataName == "full_event_quant":
+        df =df.dropna(subset=["m", "n", "rnd", "ovf", "accuracy"])
+
+        # Ensure numeric
+        df["m"] = df["m"].astype(int)
+        df["n"] = df["n"].astype(int)
+
     else:
         print(f"ERROR: dataName in 'dataLoader()-function' invalid")
 
@@ -140,6 +151,12 @@ def realRangeCheck(df: pd.DataFrame, dataName: str, max_m: int, max_n: int, min_
         real_max_n = df["mem_n"].max()
         real_min_m = df["mem_m"].min()
         real_min_n = df["mem_n"].min()
+
+    elif dataName == "full_event_quant":
+        real_max_m = df["m"].max()
+        real_max_n = df["n"].max()
+        real_min_m = df["m"].min()
+        real_min_n = df["n"].min()
     
     else:
         print(f"ERROR: dataName in 'realRangeCheck()-function' invalid")
@@ -414,6 +431,83 @@ def combiMemWeightsGraph(max_m = 5, min_m = 0, max_n = 5, min_n = 0):
 
     return "Saved to: "+ out_path
 
+def fullEventQuant(max_m = 5, min_m = 0, max_n = 5, min_n = 0):
+    """
+    Plots 10 graphs as subgraphs, so that the accuracy loss attributed
+    to the membrane potential, weight quantization AND event driven approach
+     can be compared. 10 subgraphs are returned because of the combination of the different
+    rounding and overflow mechanisms.
+    """
+
+    # Create subplot grid
+    fig, axes = plt.subplots(2, 5, figsize=(20, 8))
+    axes = axes.flatten()
+    counter = 0
+
+    # One subgraph per possible combination of rounding and overflow methodology
+    for rnd in rounding_order:
+        for ovf in overflow_order:
+
+            if counter >= len(axes):
+                print(f"Warning: More combinations than subplot positions")
+                break
+            
+            ax = axes[counter]
+            counter += 1
+
+            dataPath = f"../results/results_{rnd}_{ovf}.csv"
+            df = dataLoader(dataPath, "full_event_quant")
+
+            max_m, max_n, min_m, min_n = realRangeCheck(df,"full_event_quant", max_m, max_n, min_m, min_n)
+
+            # Plot one line for each m value
+            for m_val in range(min_m, max_m + 1):
+               
+                # Filter data for this specific combination
+                mask = (
+                    (df["rnd"] == rnd) &
+                    (df["ovf"] == ovf) &
+                    (df["m"] == m_val) &
+                    (df["n"]<= max_n) &
+                    (df["n"]>= min_n))
+                
+                subset = df[mask].sort_values("n") # Sort by n for proper line plotting
+
+                if len(subset) > 0:
+                    ax.plot(
+                        subset["n"],
+                        subset["accuracy"], 
+                        marker = markers.get(m_val, 'o'),        # Different marker per m
+                        linestyle=linestyles.get(m_val, '-'),    # Different line style per m
+                        color=colors.get(m_val, 'black'),        # Different color per m 
+                        label=f"m={m_val}", 
+                        linewidth=2.0,
+                        markersize=6,
+                        alpha=0.85)
+            
+            # Format subplot
+            title = f"Rnd={rnd}, Ovf={ovf}"
+            ax.set_title(title, fontsize=10, fontweight='bold')
+            ax.set_xlabel("n (fractional bits)", fontsize=10)
+            ax.set_ylabel("Accuracy (%)", fontsize=10)
+            ax.set_ylim(0, 100)
+            ax.set_xticks(range(min_n, max_n + 1))
+            ax.grid(True, linestyle='--', alpha=0.4)
+            ax.legend(fontsize=6, loc='best')
+    
+    # Add main title
+    fig.suptitle('Event Driven + Quantization - Accuracy vs n', 
+                    fontsize=14, fontweight='bold', y=0.98)
+    
+    plt.tight_layout()
+    outdir = f"../plots/full_event_quant{max_m}.{max_n}"
+    os.makedirs(outdir, exist_ok=True)
+    fname = "full_event_quant.png"
+    out_path = os.path.join(outdir, fname)
+    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+    return "Saved to: "+ out_path
 
 
 
