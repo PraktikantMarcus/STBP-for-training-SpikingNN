@@ -57,7 +57,7 @@ def run_inference(m, n, rnd="nearest", ovf="saturate"):
 
     # Configuration
     time_window = 20
-    num_workers = min(mp.cpu_count(), 64)
+    num_workers = min(mp.cpu_count(), 48)
     batch_size = 100  # Samples per worker task
     data_path = "./raw/"
 

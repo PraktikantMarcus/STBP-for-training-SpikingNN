@@ -417,9 +417,9 @@ class Event_SMLP_Quantized(nn.Module):
         for idx in torch.nonzero(self.input_vec, as_tuple=False).flatten():
             self.h1_mem += self.fc1.weight[:, idx]
         
-        # 2. QUANTIZE membrane potential (if enabled)
-        self.h1_mem = self._quantize_if_enabled(self.h1_mem)
-        
+            # 2. QUANTIZE membrane potential (if enabled)
+            self.h1_mem = self._quantize_if_enabled(self.h1_mem)
+            
         # 3. Generate spikes based on (quantized) membrane
         h1_spiked = act_fun(self.h1_mem)
         
@@ -431,8 +431,8 @@ class Event_SMLP_Quantized(nn.Module):
         for h in torch.nonzero(h1_spiked, as_tuple=False).flatten():
             self.h2_mem += self.fc2.weight[:, h]
         
-        # 2. QUANTIZE membrane potential (if enabled)
-        self.h2_mem = self._quantize_if_enabled(self.h2_mem)
+            # 2. QUANTIZE membrane potential (if enabled)
+            self.h2_mem = self._quantize_if_enabled(self.h2_mem)
         
         # 3. Generate spikes based on (quantized) membrane
         h2_spiked = act_fun(self.h2_mem)

@@ -2,9 +2,9 @@
 #SBATCH --partition=all
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=48
 #SBATCH --mem=32G
-#SBATCH --time=03:00:00
+#SBATCH --time=06:00:00
 #SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
 #SBATCH --job-name=quant_array
 #SBATCH --output=logs/quant_array_%A_%a.out
