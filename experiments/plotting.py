@@ -445,8 +445,8 @@ def fullEventQuant(max_m = 5, min_m = 0, max_n = 5, min_n = 0):
     counter = 0
 
     # One subgraph per possible combination of rounding and overflow methodology
-    for rnd in rounding_order:
-        for ovf in overflow_order:
+    for ovf in overflow_order:
+        for rnd in rounding_order:
 
             if counter >= len(axes):
                 print(f"Warning: More combinations than subplot positions")
