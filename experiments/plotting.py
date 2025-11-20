@@ -206,7 +206,7 @@ def get_layer_weights(state_dict, layer_name):
     """Extract weights for a specific layer"""
     return state_dict[layer_name].cpu().numpy().flatten()
 
-def plot_single_checkpoint(checkpoint_path, output_dir='plots'):
+def weights_per_layer_per_checkpoint(checkpoint_path, output_dir='plots'):
     """Plot weight distributions for all layers in a checkpoint"""
     
     state_dict, acc, epoch = load_checkpoint(checkpoint_path)
@@ -268,6 +268,63 @@ def plot_single_checkpoint(checkpoint_path, output_dir='plots'):
     print(f"Saved: {output_path}")
     plt.close()
 
+def global_weight_distribution_per_checkpoint(checkpoint_path, output_dir='plots'):
+    """Plot global weight distribution (all layers combined) for a checkpoint"""
+    
+    state_dict, acc, epoch = load_checkpoint(checkpoint_path)
+    checkpoint_name = Path(checkpoint_path).stem
+    
+    # Find all weight layers
+    weight_keys = [k for k in state_dict.keys() if 'weight' in k]
+    
+    # Combine all weights from all layers into one array
+    all_weights = []
+    for weight_key in weight_keys:
+        weights = get_layer_weights(state_dict, weight_key)
+        all_weights.extend(weights.tolist())
+    
+    # Calculate statistics using Python built-ins
+    w_min = min(all_weights)
+    w_max = max(all_weights)
+    w_mean = sum(all_weights) / len(all_weights)
+    
+    # Create single plot
+    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    
+    # Plot histogram
+    n, bins, patches = ax.hist(all_weights, bins=100, alpha=0.7, 
+                                color='steelblue', edgecolor='black')
+    
+    # Highlight min and max
+    ax.axvline(w_min, color='red', linestyle='--', linewidth=2, 
+              label=f'Min: {w_min:.4f}')
+    ax.axvline(w_max, color='green', linestyle='--', linewidth=2, 
+              label=f'Max: {w_max:.4f}')
+    ax.axvline(w_mean, color='orange', linestyle='-', linewidth=2, 
+              label=f'Mean: {w_mean:.4f}')
+    
+    # Labels and title
+    title = f'Global Weight Distribution: {checkpoint_name}\n'
+    title += f'Epoch: {epoch}, Accuracy: {acc:.2f}%\n' if isinstance(acc, (int, float)) else ''
+    title += f'Total Weights: {len(all_weights):,} | Layers: {len(weight_keys)}'
+    
+    ax.set_xlabel('Weight Value', fontsize=14)
+    ax.set_ylabel('Count', fontsize=14)
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.legend(loc='upper right', fontsize=12)
+    ax.grid(True, alpha=0.3)
+    
+    
+    plt.tight_layout()
+    
+    # Save
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f'global_weights_{checkpoint_name}.png')
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"Saved: {output_path}")
+    plt.close()
+    
+    return output_path
 
 # ======== PLOT-TYPES ===============
 def singleWeightGraphs():
@@ -602,7 +659,10 @@ def weightDistributionDir():
         print(f"Plotting: {cp_path}")
         # if not os.path.isdir('./plots/weight_distributions'):
         #         os.mkdir('./plots/weight_distributions')
-        plot_single_checkpoint(cp_path, "./plots/weight_distributions/")
+        # weights_per_layer_per_checkpoint(cp_path, "./plots/weight_distributions/") ####UNCOMMENT if you want weight distribution per layer
+        # Global distribution (all layers combined)
+        global_weight_distribution_per_checkpoint(str(cp_path), "./plots/weight_distributions/")
+
 
 
 
