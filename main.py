@@ -13,18 +13,19 @@ import torchvision
 import torchvision.transforms as transforms
 import os
 import time
-import data_setup
-from spiking_model import*
+from models.data_setup import *
+from models.spiking_model import*
+
 # os.environ['CUDA_VISIBLE_DEVICES'] = "3"
 
 names = 'spiking_model'
-device = data_setup.get_device()
+device = models.data_setup.get_device()
 
-train_dataset = data_setup.get_train_dataset(data_path="./raw/")
-train_loader = data_setup.get_train_loader(batch_size=100, data_path="./raw/")
+train_dataset = models.data_setup.get_train_dataset(data_path="./raw/")
+train_loader = models.data_setup.get_train_loader(batch_size=100, data_path="./raw/")
 
-test_set = data_setup.get_test_dataset(data_path="./raw/") 
-test_loader = data_setup.get_test_loader(batch_size=100, data_path="./raw/")
+test_set = models.data_setup.get_test_dataset(data_path="./raw/") 
+test_loader = models.data_setup.get_test_loader(batch_size=100, data_path="./raw/")
 
 
 best_acc = 0  # best test accuracy

@@ -80,37 +80,59 @@ class SMLP(nn.Module):
     784-400-10 spiking MLP (fully connected).
     Uses  existing act_fun (surrogate spike) and mem_update (LIF update).
     """
-    def __init__(self):
+    
+    def __init__(self, layers=(784, 400, 10)):
         super().__init__()
-        self.fc1 = nn.Linear(28*28, 400)   # 784 -> 400
-        self.fc2 = nn.Linear(400, 10)      # 400 -> 10
+        # Create layers dynamically
+        self.layers = nn.ModuleList()
+        for i in range(len(layers) - 1):
+            self.layers.append(nn.Linear(layers[i], layers[i+1]))
+
 
     def forward(self, input, time_window=20):
         # input: [B, 1, 28, 28] with values in [0,1]
         B = input.size(0)
 
         # Membrane and spike states
-        h1_mem = torch.zeros(B, 400, device=device)
-        h1_spike = torch.zeros(B, 400, device=device)
-        h1_sumspike = torch.zeros(B, 400, device=device)
+        # h1_mem = torch.zeros(B, 400, device=device)
+        # h1_spike = torch.zeros(B, 400, device=device)
+        # h1_sumspike = torch.zeros(B, 400, device=device)
 
-        h2_mem = torch.zeros(B, 10, device=device)
-        h2_spike = torch.zeros(B, 10, device=device)
-        h2_sumspike = torch.zeros(B, 10, device=device)
+        # h2_mem = torch.zeros(B, 10, device=device)
+        # h2_spike = torch.zeros(B, 10, device=device)
+        # h2_sumspike = torch.zeros(B, 10, device=device)
+
+        num_layers = len(self.layers)
+        
+        # Initialize membrane/spike states for each layer
+        mem = [torch.zeros(B, layer.out_features, device=device) 
+               for layer in self.layers]
+        spike = [torch.zeros(B, layer.out_features, device=device) 
+                 for layer in self.layers]
+        sumspike = [torch.zeros(B, layer.out_features, device=device) 
+                    for layer in self.layers]
 
         for _ in range(time_window):
             # Poisson/Bernoulli spike encoding from static image
             x = (input > torch.rand_like(input)).float()   # [B,1,28,28]
             x = x.view(B, -1)                              # flatten to [B,784]
 
-            # LIF updates through fully connected layers
-            h1_mem, h1_spike = mem_update(self.fc1, x, h1_mem, h1_spike)
-            h1_sumspike += h1_spike
+            # # LIF updates through fully connected layers
+            # h1_mem, h1_spike = mem_update(self.fc1, x, h1_mem, h1_spike)
+            # h1_sumspike += h1_spike
 
-            h2_mem, h2_spike = mem_update(self.fc2, h1_spike, h2_mem, h2_spike)
-            h2_sumspike += h2_spike
+            # h2_mem, h2_spike = mem_update(self.fc2, h1_spike, h2_mem, h2_spike)
+            # h2_sumspike += h2_spike
 
-        outputs = h2_sumspike / time_window   # rate-coded outputs
+            # Process through all layers
+            for i, layer in enumerate(self.layers):
+                mem[i], spike[i] = mem_update(layer, x, mem[i], spike[i])
+                sumspike[i] += spike[i]
+                x = spike[i]  # Output of this layer is input to next
+        
+        outputs = sumspike[-1] / time_window  # Last layer output
+
+        # outputs = h2_sumspike / time_window   # rate-coded outputs
         return outputs
 
 class SMLP_MemQuant(nn.Module):
