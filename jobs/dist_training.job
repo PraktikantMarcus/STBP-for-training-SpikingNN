@@ -45,7 +45,7 @@ echo "Start time:       $(date)"
 echo "=========================================="
 echo ""
 
-python dist_training.py \
+python -u dist_training.py \
     --layers $LAYERS
 EXIT_CODE=$?
 

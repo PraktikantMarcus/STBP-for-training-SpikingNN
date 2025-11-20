@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")  # non-GUI backend for scripts
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 # Define colors for different values
 colors = {0: 'blue',
@@ -71,7 +72,10 @@ def main():
     
     elif args.type == "full_event_quant":
         result = fullEventQuant(max_m = 8, max_n = 8)
-    
+
+    elif args.type == "weight_distribution_dir":
+        result = weightDistributionDir()
+
     else:
         print(f"ERROR: Unknown plot type: '{args.type}'")
         print(f"Valid types are: combiW, combiM")
@@ -79,7 +83,7 @@ def main():
         print(f"python plotting.py combiW")
 
     print(result)
-
+# ======== HELPER FUNCTIONS =========
 def dataLoader(dataPath: str, dataName :str):
     df = pd.read_csv(dataPath)
 
@@ -192,6 +196,81 @@ def realRangeCheck(df: pd.DataFrame, dataName: str, max_m: int, max_n: int, min_
 
     return (real_max_m, real_max_n, real_min_m, real_min_n)
 
+def load_checkpoint(checkpoint_path):
+    """Load checkpoint and return model state dict"""
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    return checkpoint['net'], checkpoint.get('acc', 'N/A'), checkpoint.get('epoch', 'N/A')
+
+def get_layer_weights(state_dict, layer_name):
+    """Extract weights for a specific layer"""
+    return state_dict[layer_name].cpu().numpy().flatten()
+
+def plot_single_checkpoint(checkpoint_path, output_dir='plots'):
+    """Plot weight distributions for all layers in a checkpoint"""
+    
+    state_dict, acc, epoch = load_checkpoint(checkpoint_path)
+    checkpoint_name = Path(checkpoint_path).stem
+    
+    # Find all weight layers
+    weight_keys = [k for k in state_dict.keys() if 'weight' in k]
+    
+    n_layers = len(weight_keys)
+    fig, axes = plt.subplots(1, n_layers, figsize=(6*n_layers, 5))
+    
+    if n_layers == 1:
+        axes = [axes]
+    
+    fig.suptitle(f'Weight Distributions: {checkpoint_name}\nEpoch: {epoch}, Accuracy: {acc:.2f}%' 
+                 if isinstance(acc, float) else f'Weight Distributions: {checkpoint_name}',
+                 fontsize=14, fontweight='bold')
+    
+    for idx, weight_key in enumerate(weight_keys):
+        weights = get_layer_weights(state_dict, weight_key)
+        
+        # Calculate statistics
+        w_min = weights.min()
+        w_max = weights.max()
+        w_mean = weights.mean()
+        w_std = weights.std()
+        
+        # Plot histogram
+        ax = axes[idx]
+        n, bins, patches = ax.hist(weights, bins=50, alpha=0.7, 
+                                    color='steelblue', edgecolor='black')
+        
+        # Highlight min and max
+        ax.axvline(w_min, color='red', linestyle='--', linewidth=2, 
+                  label=f'Min: {w_min:.4f}')
+        ax.axvline(w_max, color='green', linestyle='--', linewidth=2, 
+                  label=f'Max: {w_max:.4f}')
+        ax.axvline(w_mean, color='orange', linestyle='-', linewidth=2, 
+                  label=f'Mean: {w_mean:.4f}')
+        
+        # Add shading for extreme values
+        ax.axvspan(w_min, w_min + (w_max - w_min)*0.05, 
+                  alpha=0.2, color='red', label='Min region')
+        ax.axvspan(w_max - (w_max - w_min)*0.05, w_max, 
+                  alpha=0.2, color='green', label='Max region')
+        
+        # Labels and styling
+        layer_name = weight_key.replace('.weight', '')
+        ax.set_xlabel('Weight Value', fontsize=12)
+        ax.set_ylabel('Count', fontsize=12)
+        ax.set_title(f'{layer_name}\nShape: {state_dict[weight_key].shape}', 
+                    fontsize=11, fontweight='bold')
+        ax.legend(loc='upper right', fontsize=9)
+        ax.grid(True, alpha=0.3)
+        
+        # Add text box with statistics
+        stats_text = f'μ={w_mean:.4f}\nσ={w_std:.4f}\nRange=[{w_min:.4f}, {w_max:.4f}]'
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+               fontsize=9, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    plt.tight_layout()
+
+
+# ======== PLOT-TYPES ===============
 def singleWeightGraphs():
     return "This function is currently not implemented, please use plot_accuracy_vs_n.py"
 
@@ -508,6 +587,23 @@ def fullEventQuant(max_m = 5, min_m = 0, max_n = 5, min_n = 0):
     plt.close()
 
     return "Saved to: "+ out_path
+
+def weightDistributionDir():
+    # Collect checkpoint paths
+    checkpoint_paths = list(Path("./checkpoint/").glob('*.t7'))
+    checkpoint_paths = [str(p) for p in checkpoint_paths]
+
+    if not checkpoint_paths:
+        print("No checkpoints found!")
+        return
+    
+    print(f"Found {len(checkpoint_paths)} checkpoint(s)")
+
+    for cp_path in checkpoint_paths:
+        print(f"Plotting: {cp_path}")
+        if not os.path.isdir('./plots/weight_distributions'):
+                os.mkdir('./plots/weight_distributions')
+        plot_single_checkpoint(cp_path, "./plots/weight_distributions/")
 
 
 

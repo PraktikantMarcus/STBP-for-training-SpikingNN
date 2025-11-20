@@ -86,9 +86,12 @@ def train_model(args):
         print('Test Accuracy of the model on the 10000 test images: %.3f' % (100 * correct / total))
         acc = 100. * float(correct) / float(total)
         acc_record.append(acc)
-        if epoch % 5 == 0:
-            print(acc)
-            print('Saving..')
+
+        # Save ONLY if this is the best accuracy so far
+        if acc > best_acc:
+            print(f'New best accuracy: {acc:.2f}% (previous: {best_acc:.2f}%)')
+            print('Saving best checkpoint...')
+            best_acc = acc
             state = {
                 'net': snn.state_dict(),
                 'acc': acc,
@@ -98,8 +101,22 @@ def train_model(args):
             if not os.path.isdir('checkpoint'):
                 os.mkdir('checkpoint')
             layer_string = "_".join(str(x) for x in args.layers)
-            torch.save(state, f"./checkpoint/ckpt_"+layer_string+".t7")
-            best_acc = acc
+            torch.save(state, f"./checkpoint/ckpt_best_"+layer_string+".t7")
+
+        # if epoch % 5 == 0:
+        #     print(acc)
+        #     print('Saving..')
+        #     state = {
+        #         'net': snn.state_dict(),
+        #         'acc': acc,
+        #         'epoch': epoch,
+        #         'acc_record': acc_record,
+        #     }
+        #     if not os.path.isdir('checkpoint'):
+        #         os.mkdir('checkpoint')
+        #     layer_string = "_".join(str(x) for x in args.layers)
+        #     torch.save(state, f"./checkpoint/ckpt_"+layer_string+".t7")
+        #     best_acc = acc
 
 def main():
     parser = argparse.ArgumentParser(description="Run training for a specific Model Architecture")
