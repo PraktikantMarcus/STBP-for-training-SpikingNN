@@ -6,15 +6,50 @@ import time
 from models.data_setup import *
 from models.spiking_model import*
 import argparse
+import torch
+import numpy as np
+import random
+
+def set_seed(seed=42):
+    """Set all random seeds for reproducibility"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # Make PyTorch deterministic
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+    print(f"✓ Random seed set to {seed}")
 
 def train_model(args):
+    set_seed(args.seed)
     device = models.data_setup.get_device()
 
+    generator = torch.Generator()
+    generator.manual_seed(args.seed)
+
     train_dataset = models.data_setup.get_train_dataset(data_path="./raw/")
-    train_loader = models.data_setup.get_train_loader(batch_size=100, data_path="./raw/")
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=100,
+        shuffle=True,
+        num_workers=0, 
+        generator=generator
+    )
 
     test_set = models.data_setup.get_test_dataset(data_path="./raw/") 
-    test_loader = models.data_setup.get_test_loader(batch_size=100, data_path="./raw/")
+    test_loader = torch.utils.data.DataLoader(
+        test_set,
+        batch_size=100,
+        shuffle=False,  # Don't shuffle test set
+        num_workers=0,
+        generator=generator
+    )
 
     best_acc = 0  # best test accuracy
     start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -61,6 +96,7 @@ def train_model(args):
                 print('Time elasped:', time.time()-start_time)
         correct = 0
         total = 0
+        snn.eval()
         optimizer = lr_scheduler(optimizer, epoch, learning_rate, 40)
 
         with torch.no_grad():
@@ -97,37 +133,39 @@ def train_model(args):
                 'acc': acc,
                 'epoch': epoch,
                 'acc_record': acc_record,
+                'seed': args.seed,  # Save seed for reproducibility
+                'args': vars(args)
             }
             if not os.path.isdir('checkpoint'):
                 os.mkdir('checkpoint')
             layer_string = "_".join(str(x) for x in args.layers)
             torch.save(state, f"./checkpoint/ckpt_"+layer_string+".t7")
 
-        # if epoch % 5 == 0:
-        #     print(acc)
-        #     print('Saving..')
-        #     state = {
-        #         'net': snn.state_dict(),
-        #         'acc': acc,
-        #         'epoch': epoch,
-        #         'acc_record': acc_record,
-        #     }
-        #     if not os.path.isdir('checkpoint'):
-        #         os.mkdir('checkpoint')
-        #     layer_string = "_".join(str(x) for x in args.layers)
-        #     torch.save(state, f"./checkpoint/ckpt_"+layer_string+".t7")
-        #     best_acc = acc
+    print(f'\nTraining complete!')
+    print(f'Best accuracy: {best_acc:.2f}%')
+    print(f'Final accuracy: {acc:.2f}%')
+    print(f'Random seed used: {args.seed}')
 
 def main():
     parser = argparse.ArgumentParser(description="Run training for a specific Model Architecture")
     parser.add_argument("--layers", type=int, nargs="+", 
                        default=[784, 400, 10],
                        help="Layer sizes (e.g., --layers 784 400 10)")
+    parser.add_argument("--seed", type=int, default=42,
+                       help="Random seed for reproducibility")
     parser.add_argument("--epoch", type=int, default=100, help="Specifiy the number of epochs") # NOT IMPLEMENTED
     parser.add_argument("--output", type=str, default="ckpt_spiking_model.t7", help="Location where checkpoint will be saved") #NOT IMPLEMENTED
 
     args = parser.parse_args()
-    print(f"Starting training-run for model architecture: {args.layers}")
+
+    print("=" * 60)
+    print("Training Configuration")
+    print("=" * 60)
+    print(f"Architecture: {args.layers}")
+    print(f"Random seed: {args.seed}")
+    print(f"Epochs: {args.epoch}")
+    print("=" * 60)
+    print()
 
     result = train_model(args)
 

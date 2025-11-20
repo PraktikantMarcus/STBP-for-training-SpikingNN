@@ -46,7 +46,8 @@ echo "=========================================="
 echo ""
 
 python -u dist_training.py \
-    --layers $LAYERS
+    --layers $LAYERS\
+    --seed 0
 EXIT_CODE=$?
 
 echo ""
