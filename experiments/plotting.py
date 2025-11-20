@@ -6,6 +6,7 @@ import matplotlib
 matplotlib.use("Agg")  # non-GUI backend for scripts
 import matplotlib.pyplot as plt
 from pathlib import Path
+import torch
 
 # Define colors for different values
 colors = {0: 'blue',
@@ -230,8 +231,6 @@ def plot_single_checkpoint(checkpoint_path, output_dir='plots'):
         # Calculate statistics
         w_min = weights.min()
         w_max = weights.max()
-        w_mean = weights.mean()
-        w_std = weights.std()
         
         # Plot histogram
         ax = axes[idx]
@@ -243,31 +242,31 @@ def plot_single_checkpoint(checkpoint_path, output_dir='plots'):
                   label=f'Min: {w_min:.4f}')
         ax.axvline(w_max, color='green', linestyle='--', linewidth=2, 
                   label=f'Max: {w_max:.4f}')
-        ax.axvline(w_mean, color='orange', linestyle='-', linewidth=2, 
-                  label=f'Mean: {w_mean:.4f}')
         
-        # Add shading for extreme values
-        ax.axvspan(w_min, w_min + (w_max - w_min)*0.05, 
-                  alpha=0.2, color='red', label='Min region')
-        ax.axvspan(w_max - (w_max - w_min)*0.05, w_max, 
-                  alpha=0.2, color='green', label='Max region')
         
         # Labels and styling
         layer_name = weight_key.replace('.weight', '')
         ax.set_xlabel('Weight Value', fontsize=12)
         ax.set_ylabel('Count', fontsize=12)
-        ax.set_title(f'{layer_name}\nShape: {state_dict[weight_key].shape}', 
-                    fontsize=11, fontweight='bold')
+        shape = state_dict[weight_key].shape
+        if len(shape) == 2:  # For 2D weight matrices
+            display_shape = f"[{shape[1]}, {shape[0]}]"  # Swap: [out, in] → [in, out]
+        else:
+            display_shape = str(list(shape))
+
+        ax.set_title(f'{layer_name}\nShape: {display_shape}', 
+            fontsize=11, fontweight='bold')
         ax.legend(loc='upper right', fontsize=9)
         ax.grid(True, alpha=0.3)
-        
-        # Add text box with statistics
-        stats_text = f'μ={w_mean:.4f}\nσ={w_std:.4f}\nRange=[{w_min:.4f}, {w_max:.4f}]'
-        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
-               fontsize=9, verticalalignment='top',
-               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
     plt.tight_layout()
+
+    # Save plot
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f'{checkpoint_name}.png')
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"Saved: {output_path}")
+    plt.close()
 
 
 # ======== PLOT-TYPES ===============
@@ -601,8 +600,8 @@ def weightDistributionDir():
 
     for cp_path in checkpoint_paths:
         print(f"Plotting: {cp_path}")
-        if not os.path.isdir('./plots/weight_distributions'):
-                os.mkdir('./plots/weight_distributions')
+        # if not os.path.isdir('./plots/weight_distributions'):
+        #         os.mkdir('./plots/weight_distributions')
         plot_single_checkpoint(cp_path, "./plots/weight_distributions/")
 
 

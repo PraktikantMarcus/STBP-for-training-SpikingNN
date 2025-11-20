@@ -101,7 +101,7 @@ def train_model(args):
             if not os.path.isdir('checkpoint'):
                 os.mkdir('checkpoint')
             layer_string = "_".join(str(x) for x in args.layers)
-            torch.save(state, f"./checkpoint/ckpt_best_"+layer_string+".t7")
+            torch.save(state, f"./checkpoint/ckpt_"+layer_string+".t7")
 
         # if epoch % 5 == 0:
         #     print(acc)
