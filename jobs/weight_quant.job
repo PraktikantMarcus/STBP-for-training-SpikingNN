@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=32G
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
 #SBATCH --job-name=weight_quant
 #SBATCH --output=logs/weight_quant/%A_%a.out
@@ -21,7 +21,7 @@ source activate torch312
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export PYTHONUNBUFFERED=1
 
-# Define parameter combinations
+#Define parameter combinations
 MODEL_ARCHITECTURE=(
     "784 200 10"
     "784 400 10"
@@ -30,9 +30,12 @@ MODEL_ARCHITECTURE=(
     "784 200 200 10"
     "784 400 400 10"
 )
+# MODEL_ARCHITECTURE=("784 400 10")
 
 ROUNDING_METHODS=("nearest" "floor" "ceil" "stochastic" "trunc")
+# ROUNDING_METHODS=("nearest")
 OVERFLOW_METHODS=("saturate" "wrap")
+# OVERFLOW_METHODS=("saturate")
 
 # Calculate which combination to use based on array task ID
 # Task ID 0-59 maps to all combinations of (model, rounding, overflow)
@@ -72,11 +75,11 @@ echo "=========================================="
 echo ""
 
 # Run quantization sweep with specific parameters
-python experiments/quantize_weights.py \
+python -u quantize_weights.py \
     --layers $LAYERS \
     --rnd "$ROUNDING" \
     --ovf "$OVERFLOW" \
-    --output "results/weight_quant/${LAYERS// /_}_${ROUNDING}_${OVERFLOW}.csv"
+    --outdir "results/weight_quant/"
 
 EXIT_CODE=$?
 

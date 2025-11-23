@@ -9,7 +9,7 @@
 #SBATCH --job-name=train_array
 #SBATCH --output=logs/training/train_array_%A_%a.out
 #SBATCH --error=logs/training/train_array_%A_%a.err
-#SBATCH --array=0-5
+#SBATCH --array=0-1
 
 source activate torch312
 
@@ -17,14 +17,16 @@ source activate torch312
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # Define parameter combinations
-MODEL_ARCHITECTURE=(
-    "784 200 10"
-    "784 400 10"
-    "784 800 10"
-    "784 100 100 10"
-    "784 200 200 10"
-    "784 400 400 10"
-)
+# MODEL_ARCHITECTURE=(
+#     "784 200 10"
+#     "784 400 10"
+#     "784 800 10"
+#     "784 100 100 10"
+#     "784 200 200 10"
+#     "784 400 400 10"
+# )
+
+MODEL_ARCHITECTURE=("784 100 100 10")
 
 NUM_ARCHITECTURE=${#MODEL_ARCHITECTURE[@]}
 

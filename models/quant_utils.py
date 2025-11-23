@@ -125,6 +125,7 @@ def run_quant_sweep(base_model, test_loader, device,
                 acc = evaluate_accuracy(model_q, test_loader, device)
                 rows.append({"m": m, "n": n, "rounding": rnd, "overflow": ovf,
                              "acc": acc, "total_bits": 1 + m + n, "format": "TI"})
+                print(f"Finished Q{m}.{n} with {rnd}-rounding and {ovf}-overflow")
 
     df = pd.DataFrame(rows)
     csv_path = os.path.join(outdir, f"qmn_ti_{max_total_bits}bits.csv")

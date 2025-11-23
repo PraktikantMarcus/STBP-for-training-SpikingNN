@@ -26,6 +26,7 @@ def set_seed(seed=42):
 
     print(f"✓ Random seed set to {seed}")
 
+
 def train_model(args):
     set_seed(args.seed)
     device = models.data_setup.get_device()
