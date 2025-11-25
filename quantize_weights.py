@@ -109,7 +109,7 @@ def main():
 
     # Load trained model
     snn = SMLP(args.layers).to(device)
-    ckpt = torch.load(f"./checkpoint/ckpt_{layer_string}.t7", map_location=device)
+    ckpt = torch.load(f"{checkpoint_path}", map_location=device)
     snn.load_state_dict(ckpt["net"])
     snn.eval()
 

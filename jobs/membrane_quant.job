@@ -1,0 +1,92 @@
+#!/bin/bash
+#SBATCH --partition=all
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=48
+#SBATCH --mem=32G
+#SBATCH --time=12:00:00
+#SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
+#SBATCH --job-name=membrane_quant
+#SBATCH --output=logs/membrane_quant/%A_%a.out
+#SBATCH --error=logs/membrane_quant/%A_%a.err
+#SBATCH --array=0-59%10
+
+# This is a SLURM job array that runs different parameter combinations in parallel
+# 6 models × 5 rounding × 2 overflow = 60 total combinations
+# Max 10 jobs running simultaneously
+
+source activate torch312
+
+# Environment variables
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export PYTHONUNBUFFERED=1
+
+#Define parameter combinations
+MODEL_ARCHITECTURE=(
+    "784 200 10"
+    "784 400 10"
+    "784 800 10"
+    "784 100 100 10"
+    "784 200 200 10"
+    "784 400 400 10"
+)
+# MODEL_ARCHITECTURE=("784 400 10")
+
+ROUNDING_METHODS=("nearest" "floor" "ceil" "stochastic" "trunc")
+# ROUNDING_METHODS=("nearest")
+OVERFLOW_METHODS=("saturate" "wrap")
+# OVERFLOW_METHODS=("saturate")
+
+# Calculate which combination to use based on array task ID
+# Task ID 0-59 maps to all combinations of (model, rounding, overflow)
+# Structure: For each model, iterate through all rounding×overflow combinations
+
+NUM_MODELS=${#MODEL_ARCHITECTURE[@]}
+NUM_ROUNDING=${#ROUNDING_METHODS[@]}
+NUM_OVERFLOW=${#OVERFLOW_METHODS[@]}
+
+# Combinations per model = 5 rounding × 2 overflow = 10
+COMBOS_PER_MODEL=$((NUM_ROUNDING * NUM_OVERFLOW))
+
+# Calculate indices
+MODEL_IDX=$((SLURM_ARRAY_TASK_ID / COMBOS_PER_MODEL))
+REMAINDER=$((SLURM_ARRAY_TASK_ID % COMBOS_PER_MODEL))
+RND_IDX=$((REMAINDER / NUM_OVERFLOW))
+OVF_IDX=$((REMAINDER % NUM_OVERFLOW))
+
+# Get actual values
+LAYERS="${MODEL_ARCHITECTURE[$MODEL_IDX]}"
+ROUNDING=${ROUNDING_METHODS[$RND_IDX]}
+OVERFLOW=${OVERFLOW_METHODS[$OVF_IDX]}
+
+echo "=========================================="
+echo "SLURM Job Array Task"
+echo "=========================================="
+echo "Array Job ID:     $SLURM_ARRAY_JOB_ID"
+echo "Array Task ID:    $SLURM_ARRAY_TASK_ID"
+echo "Job ID:           $SLURM_JOB_ID"
+echo "Node:             $(hostname)"
+echo "CPUs:             $SLURM_CPUS_PER_TASK"
+echo "Model:            $LAYERS"
+echo "Rounding:         $ROUNDING"
+echo "Overflow:         $OVERFLOW"
+echo "Start time:       $(date)"
+echo "=========================================="
+echo ""
+
+# Run quantization sweep with specific parameters
+python -u quantize_membrane.py \
+    --layers $LAYERS \
+    --rnd "$ROUNDING" \
+    --ovf "$OVERFLOW" \
+    --outdir "results/membrane_quant/"
+
+EXIT_CODE=$?
+
+echo ""
+echo "=========================================="
+echo "Job completed at $(date)"
+echo "Exit code: $EXIT_CODE"
+echo "=========================================="
+
+exit $EXIT_CODE

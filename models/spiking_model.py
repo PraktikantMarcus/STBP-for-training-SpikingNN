@@ -46,7 +46,7 @@ def mem_update_quantized(ops, x, mem, spike,
     Membrane update with quantization BEFORE spike generation.
     This ensures spikes are based on quantized membrane values.
     """
-    from spiking_model import act_fun
+    from models.spiking_model import act_fun
     
     # Compute new membrane
     mem = mem * decay * (1. - spike) + ops(x)
@@ -135,18 +135,21 @@ class SMLP(nn.Module):
         # outputs = h2_sumspike / time_window   # rate-coded outputs
         return outputs
 
-class SMLP_MemQuant(nn.Module):
-    """SMLP with membrane quantization - FIXED VERSION."""
+class SMLP_MemQuant(nn.Module,):
+    """SMLP with membrane quantization"""
     
     def __init__(self, 
                  quant_mem: bool = False,
                  mem_m: int = 2, 
                  mem_n: int = 4,
                  mem_rounding: str = "nearest",
-                 mem_overflow: str = "saturate"):
+                 mem_overflow: str = "saturate",
+                 layers=(784, 400, 10) ):
         super().__init__()
-        self.fc1 = nn.Linear(28*28, 400)
-        self.fc2 = nn.Linear(400, 10)
+        self.layer_sizes = layers
+        self.layers = nn.ModuleList()
+        for i in range(len(layers) - 1):
+            self.layers.append(nn.Linear(layers[i], layers[i+1]))
         
         self.quant_mem = quant_mem
         self.mem_m = mem_m
@@ -156,46 +159,40 @@ class SMLP_MemQuant(nn.Module):
 
     def forward(self, input, time_window=20):
         B = input.size(0)
-
-        h1_mem = torch.zeros(B, 400, device=device)
-        h1_spike = torch.zeros(B, 400, device=device)
-        h1_sumspike = torch.zeros(B, 400, device=device)
-
-        h2_mem = torch.zeros(B, 10, device=device)
-        h2_spike = torch.zeros(B, 10, device=device)
-        h2_sumspike = torch.zeros(B, 10, device=device)
-
+        
+        # Initialize membrane potentials, spikes, and sum spikes for each layer
+        mem = []
+        spike = []
+        sumspike = []
+        
+        for i in range(1, len(self.layer_sizes)):  # Skip input layer
+            layer_size = self.layer_sizes[i]
+            mem.append(torch.zeros(B, layer_size, device=input.device))
+            spike.append(torch.zeros(B, layer_size, device=input.device))
+            sumspike.append(torch.zeros(B, layer_size, device=input.device))
+        
         for _ in range(time_window):
             x = (input > torch.rand_like(input)).float()
             x = x.view(B, -1)
-
-            # Layer 1 update
-            if self.quant_mem:
-                # Use quantized mem_update
-                h1_mem, h1_spike = mem_update_quantized(
-                    self.fc1, x, h1_mem, h1_spike,
-                    self.mem_m, self.mem_n,
-                    self.mem_rounding, self.mem_overflow
-                )
-            else:
-                # Standard full-precision update
-                h1_mem, h1_spike = mem_update(self.fc1, x, h1_mem, h1_spike)
             
-            h1_sumspike += h1_spike
-
-            # Layer 2 update
-            if self.quant_mem:
-                h2_mem, h2_spike = mem_update_quantized(
-                    self.fc2, h1_spike, h2_mem, h2_spike,
-                    self.mem_m, self.mem_n,
-                    self.mem_rounding, self.mem_overflow
-                )
-            else:
-                h2_mem, h2_spike = mem_update(self.fc2, h1_spike, h2_mem, h2_spike)
-            
-            h2_sumspike += h2_spike
-
-        outputs = h2_sumspike / time_window
+            # Process each layer
+            for layer_idx, layer in enumerate(self.layers):
+                if self.quant_mem:
+                    mem[layer_idx], spike[layer_idx] = mem_update_quantized(
+                        layer, x, mem[layer_idx], spike[layer_idx],
+                        self.mem_m, self.mem_n,
+                        self.mem_rounding, self.mem_overflow
+                    )
+                else:
+                    mem[layer_idx], spike[layer_idx] = mem_update(
+                        layer, x, mem[layer_idx], spike[layer_idx]
+                    )
+                
+                sumspike[layer_idx] += spike[layer_idx]
+                x = spike[layer_idx]  # Output of this layer becomes input to next
+        
+        # Return the output from the last layer
+        outputs = sumspike[-1] / time_window
         return outputs
 
 class Event_SMLP(nn.Module):
