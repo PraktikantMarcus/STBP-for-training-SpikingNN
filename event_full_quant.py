@@ -11,6 +11,21 @@ import numpy as np
 import argparse
 import pandas as pd
 import os
+import random
+
+def set_seed(seed=42):
+    """Set all random seeds for reproducibility"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # Make PyTorch deterministic
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    os.environ['PYTHONHASHSEED'] = str(seed)
 
 
 def process_batch(args):
@@ -19,15 +34,16 @@ def process_batch(args):
     More efficient than process_sample for reducing overhead.
     
     Args:
-        args: tuple of (images, labels, model_state_dict, time_window, rnd, ovf)
+        args: tuple of (images, labels,layers, model_state_dict, time_window, rnd, ovf)
     
     Returns:
         tuple of (predictions, labels)
     """
-    images, labels, model_state_dict, time_window, m, n, rnd, ovf = args
+    images, labels, layers, model_state_dict, time_window, m, n, rnd, ovf, = args
     
     # Create model in this worker process
-    model = Event_SMLP_Quantized(True,
+    model = Event_SMLP_Quantized(layers,
+                                True,
                                  m,
                                  n,
                                  rnd,
@@ -50,9 +66,9 @@ def process_batch(args):
     
     return predictions, labels.tolist()
 
-def run_inference(m, n, rnd="nearest", ovf="saturate"):
+def run_inference(args, m, n):
     print("=" * 80)
-    print(f"Running Q{m}.{n} with '{rnd}' rounding and '{ovf}' overflow")
+    print(f"Running Q{m}.{n} with '{args.rnd}' rounding and '{args.ovf}' overflow")
     print("=" * 80)
 
     # Configuration
@@ -69,12 +85,20 @@ def run_inference(m, n, rnd="nearest", ovf="saturate"):
 
     # Load checkpoint
     print("Loading checkpoint...")
-    checkpoint = torch.load("./checkpoint/ckptspiking_model.t7", 
-                           map_location='cpu', 
-                           weights_only=True)
+    # checkpoint = torch.load("./checkpoint/ckptspiking_model.t7", 
+    #                        map_location='cpu', 
+    #                        weights_only=True)
+
+    layer_string = "_".join(str(x) for x in args.layers)
+    checkpoint_path = f"./checkpoint/ckpt_{layer_string}.t7"
+    ckpt = torch.load(f"{checkpoint_path}", map_location=device)
+
+    new_outdir = args.outdir + layer_string
+    os.makedirs(new_outdir, exist_ok=True)
+
     # Get model state dict
-    model_state = checkpoint['net']
-    print(f"✓ Loaded checkpoint (epoch={checkpoint.get('epoch')}, acc={checkpoint.get('acc'):.2f}%)")
+    model_state = ckpt['net']
+    print(f"✓ Loaded checkpoint (epoch={ckpt.get('epoch')}, acc={ckpt.get('acc'):.2f}%)")
     
      # Load test dataset
     print("Loading test dataset...")
@@ -102,7 +126,7 @@ def run_inference(m, n, rnd="nearest", ovf="saturate"):
     print(f"Starting inference with {num_workers} workers...")
     worker_args = []
     for images, labels in test_loader:
-        worker_args.append((images, labels, model_state, time_window, m, n, rnd, ovf))
+        worker_args.append((images, labels, args.layers, model_state, time_window, m, n, args.rnd, args.ovf))
 
     # Create process pool and process batches
     start_time = time.time()
@@ -147,8 +171,8 @@ def run_inference(m, n, rnd="nearest", ovf="saturate"):
     print("=" * 70)
 
     # Compare with checkpoint accuracy
-    if 'acc' in checkpoint:
-        ckpt_acc = checkpoint['acc']
+    if 'acc' in ckpt:
+        ckpt_acc = ckpt['acc']
         print(f"\nCheckpoint accuracy: {ckpt_acc:.2f}%")
         print(f"Inference accuracy:  {accuracy:.3f}%")
         print(f"Difference:          {abs(accuracy - ckpt_acc):.3f}%")
@@ -157,8 +181,8 @@ def run_inference(m, n, rnd="nearest", ovf="saturate"):
     return {
         'm': m,
         'n': n,
-        'rnd': rnd,
-        'ovf': ovf,
+        'rnd': args.rnd,
+        'ovf': args.ovf,
         'accuracy': accuracy,
         'total_samples': total,
         'correct': correct,
@@ -167,14 +191,21 @@ def run_inference(m, n, rnd="nearest", ovf="saturate"):
     }
 def main():
     parser = argparse.ArgumentParser(description="Run multicore, fully-quantized inference. Using specific rounding and overflow mechanics for membrane quantization")
+    parser.add_argument("--layers", type=int, nargs="+", 
+                       default=[784, 400, 10],
+                       help="Layer sizes (e.g., --layers 784 400 10)")
     parser.add_argument("--rnd", help="Select valid rounding mechanics: floor, ceil, trunc, nearest, stochastic")
     parser.add_argument("--ovf", help="Select valid overflow mechanics: saturate, wrap")
     parser.add_argument("--m_max", type=int, default=5, help="Maximum value for m in Qm.n (default: 5)")
     parser.add_argument("--n_max", type=int, default=8, help="Maximum value for n in Qm.n (default: 8)")
     parser.add_argument("--m_min", type=int, default=0, help="Minimum value for m in Qm.n (default: 0)")
     parser.add_argument("--n_min", type=int, default=0, help="Minimum value for n in Qm.n (default: 0)")
-    parser.add_argument("--output", type=str, default="quantization_results.csv", help="Output CSV file for results")
-
+    parser.add_argument("--seed", type=int, default=0, help="Enter the global seed for reproducibility")
+    parser.add_argument("--outdir", type=str, default="quantization_results.csv", help="Output CSV file for results")
+    parser.add_argument("--fixWQuant", action='store_true')
+    parser.add_argument("--dynWQuant", action='store_true')
+    parser.add_argument("--wm", default=0)
+    parser.add_argument("--wn", default=2)
 
     args = parser.parse_args()
     print("Starting quantization parameter sweep...")
@@ -182,6 +213,17 @@ def main():
     print(f"n range: [{args.n_min}, {args.n_max}]")
     print(f"Rounding: {args.rnd}, Overflow: {args.ovf}")
     print()
+
+    if args.dynWQuant: 
+        args.outdir = "results/dyn_full_quantization/"
+        print(f"Dynamic weight quantization activated")
+    
+    elif args.fixWQuant:
+        args.outdir = "results/event_fix_full_quantization/"
+        print(f"Fixed weight quantization activated")
+
+    # Set seed in main process
+    set_seed(args.seed)
 
     mp.set_start_method('spawn', force=True)
 
@@ -198,7 +240,7 @@ def main():
             print(f"Configuration {current_config}/{total_configs}: Q{m}.{n}")
             print(f"{'='*80}\n")
             
-            result = run_inference(m, n, args.rnd, args.ovf)
+            result = run_inference(args,m, n)
             all_results.append(result)
             print()
     
@@ -209,7 +251,7 @@ def main():
     df = df.sort_values('accuracy', ascending=False)
     
     # Save to CSV
-    output_path = args.output
+    output_path = args.outdir
     df.to_csv(output_path, index=False)
     print(f"\n{'='*80}")
     print(f"Results saved to: {output_path}")

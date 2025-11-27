@@ -328,7 +328,7 @@ class Event_SMLP_Quantized(nn.Module):
     """
     
     def __init__(self, 
-                layers = (784, 400, 10)
+                layers = (784, 400, 10),
                  quant_mem: bool = False,
                  mem_m: int = 2, 
                  mem_n: int = 4,
