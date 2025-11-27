@@ -73,8 +73,11 @@ def mem_quant(args):
             
             # Load same weights (not quantized)
             snn_memquant.load_state_dict(ckpt["net"])
-            if args.wQuant:
+            if args.fixWQuant:
                 models.quant_utils.quantize_model_weights_(snn_memquant, args.wm, args.wn, args.rnd, args.ovf)
+            elif args.dynWQuant:
+                models.quant_utils.quantize_model_weights_(snn_memquant, m, n, args.rnd, args.ovf)
+                    
             snn_memquant.eval()
             
             acc = models.quant_utils.evaluate_accuracy(snn_memquant, test_loader, device)
@@ -211,15 +214,22 @@ def main():
     parser.add_argument("--m", default=5)
     parser.add_argument("--n", default=8)
     parser.add_argument("--seed", type=int, default=0, help="Enter the global seed for reproducibility")
-    parser.add_argument("--outdir", default="results/membrane_quantization/")
-    parser.add_argument("--wQuant", default=False)
+    parser.add_argument("--outdir", default="results/fix_membrane_quantization/")
+    parser.add_argument("--fixWQuant", action='store_true')
+    parser.add_argument("--dynWQuant", action='store_true')
     parser.add_argument("--wm", default=0)
     parser.add_argument("--wn", default=2)
 
 
     args = parser.parse_args()
-    if args.wQuant:
-        args.outdir = "results/full_quantization/"
+    if args.dynWQuant: 
+        args.outdir = "results/dyn_full_quantization/"
+        print(f"Dynamic weight quantization activated")
+    
+    elif args.fixWQuant:
+        args.outdir = "results/fix_full_quantization/"
+        print(f"Fixed weight quantization activated")
+        
 
     print(f"Starting membrane quantization vs. accuracy: {args.layers}")
     print("Starting quantization parameter sweep...")

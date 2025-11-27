@@ -328,6 +328,7 @@ class Event_SMLP_Quantized(nn.Module):
     """
     
     def __init__(self, 
+                layers = (784, 400, 10)
                  quant_mem: bool = False,
                  mem_m: int = 2, 
                  mem_n: int = 4,
@@ -335,8 +336,14 @@ class Event_SMLP_Quantized(nn.Module):
                  mem_overflow: str = "saturate",
                  track_extrema: bool = False):
         super().__init__()
-        self.fc1 = nn.Linear(28*28, 400)
-        self.fc2 = nn.Linear(400, 10)
+        self.layers = layers
+        self.num_layers = len(layers) - 1  # Number of linear layers
+        
+        # Create dynamic linear layers
+        self.fcs = nn.ModuleList([
+            nn.Linear(layers[i], layers[i+1]) 
+            for i in range(self.num_layers)
+        ])
         
         # Quantization parameters
         self.quant_mem = quant_mem
@@ -348,16 +355,17 @@ class Event_SMLP_Quantized(nn.Module):
         # Analysis flag
         self.track_extrema = track_extrema
         
-        # State buffers (single sample)
-        self.register_buffer("h1_mem", torch.zeros(400))
-        self.register_buffer("h2_mem", torch.zeros(10))
-        self.register_buffer("input_vec", torch.zeros(784))
+        # State buffers (single sample) - create for each layer
+        self.register_buffer("input_vec", torch.zeros(layers[0]))
+        for i in range(self.num_layers):
+            self.register_buffer(f"h{i+1}_mem", torch.zeros(layers[i+1]))
 
     def reset_state(self):
         """Reset membrane potentials for new sample."""
-        device = self.h1_mem.device
-        self.h1_mem = torch.zeros(400, device=device)
-        self.h2_mem = torch.zeros(10, device=device)
+        device = self.input_vec.device
+        for i in range(self.num_layers):
+            mem = getattr(self, f"h{i+1}_mem")
+            setattr(self, f"h{i+1}_mem", torch.zeros_like(mem, device=device))
 
     def forward(self, input, time_window=20):
         """
@@ -371,13 +379,14 @@ class Event_SMLP_Quantized(nn.Module):
             outputs: Rate-coded outputs [B, 10]
         """
         B = input.size(0)
+        output_size = self.layers[-1]
         outputs = torch.zeros(B, 10, device=input.device)
         
         # Process each sample independently
         for b in range(B):
             self.reset_state()
             sample = input[b]
-            h2_sumspike = torch.zeros(10, device=input.device)
+            h_final_sumspike = torch.zeros(output_size, device=input.device)
             
             for t in range(time_window):
                 # Poisson/Bernoulli spike encoding
@@ -386,13 +395,13 @@ class Event_SMLP_Quantized(nn.Module):
                 
                 # Process timestep (with or without extrema tracking)
                 if self.track_extrema:
-                    h2_spike, _, _ = self.process_time_step_collect_extrema()
+                    h_final_spike, _, _ = self.process_time_step_collect_extrema()
                 else:
-                    h2_spike = self.process_time_step_fast()
+                    h_final_spike = self.process_time_step_fast()
                 
-                h2_sumspike += h2_spike
+                h_final_sumspike += h_final_spike
             
-            outputs[b] = h2_sumspike / time_window
+            outputs[b] = h_final_sumspike / time_window
         
         return outputs
 
@@ -422,46 +431,42 @@ class Event_SMLP_Quantized(nn.Module):
         Fast event-driven processing with optional quantization.
         No extrema tracking.
         
-        Returns:
-            h2_spiked: Output spike vector [10]
+       Returns:
+            h_final_spiked: Output spike vector [output_size]
         """
         from models.spiking_model import act_fun, decay
         
-        # ===== DECAY =====
-        self.h1_mem *= decay
-        self.h2_mem *= decay
-
-        # ===== HIDDEN LAYER =====
-        # 1. Event-driven accumulation (only spiking inputs)
-        for idx in torch.nonzero(self.input_vec, as_tuple=False).flatten():
-            self.h1_mem += self.fc1.weight[:, idx]
+       # ===== DECAY =====
+        for i in range(self.num_layers):
+            mem = getattr(self, f"h{i+1}_mem")
+            setattr(self, f"h{i+1}_mem", mem * decay)
         
-            # 2. QUANTIZE membrane potential (if enabled)
-            self.h1_mem = self._quantize_if_enabled(self.h1_mem)
+        # Process through all layers
+        layer_input = self.input_vec
+        
+        for layer_idx in range(self.num_layers):
+            mem = getattr(self, f"h{layer_idx+1}_mem")
+            fc = self.fcs[layer_idx]
             
-        # 3. Generate spikes based on (quantized) membrane
-        h1_spiked = act_fun(self.h1_mem)
+            # 1. Event-driven accumulation (only spiking inputs)
+            for idx in torch.nonzero(layer_input, as_tuple=False).flatten():
+                mem += fc.weight[:, idx]
+            
+                # 2. QUANTIZE membrane potential (if enabled)
+                mem = self._quantize_if_enabled(mem)
+                setattr(self, f"h{layer_idx+1}_mem", mem)
+            
+            # 3. Generate spikes based on (quantized) membrane
+            h_spiked = act_fun(mem)
+            
+            # 4. Reset spiking neurons
+            mem[h_spiked.bool()] = 0.0
+            setattr(self, f"h{layer_idx+1}_mem", mem)
+            
+            # Output of this layer becomes input to next
+            layer_input = h_spiked
         
-        # 4. Reset spiking neurons
-        self.h1_mem[h1_spiked.bool()] = 0.0
-        
-        # ===== OUTPUT LAYER =====
-        # 1. Event-driven accumulation (only spiking hidden neurons)
-        for h in torch.nonzero(h1_spiked, as_tuple=False).flatten():
-            self.h2_mem += self.fc2.weight[:, h]
-        
-            # 2. QUANTIZE membrane potential (if enabled)
-            self.h2_mem = self._quantize_if_enabled(self.h2_mem)
-        
-        # 3. Generate spikes based on (quantized) membrane
-        h2_spiked = act_fun(self.h2_mem)
-        
-        # 4. Reset spiking neurons
-        self.h2_mem[h2_spiked.bool()] = 0.0
-        
-        
-        
-        return h2_spiked
+        return layer_input  # Final layer spikes
 
     def process_time_step_collect_extrema(self):
         """
@@ -477,55 +482,45 @@ class Event_SMLP_Quantized(nn.Module):
         step_max = -float("inf")
         step_min = +float("inf")
         
-        # ===== HIDDEN LAYER =====
-        # 1. Event-driven accumulation
-        for idx in torch.nonzero(self.input_vec, as_tuple=False).flatten():
-            self.h1_mem += self.fc1.weight[:, idx]
-            
-            # Track extrema BEFORE quantization
-            h1_max = self.h1_mem.max().item()
-            h1_min = self.h1_mem.min().item()
-            if h1_max > step_max:
-                step_max = h1_max
-            if h1_min < step_min:
-                step_min = h1_min
-        
-        # 2. QUANTIZE membrane potential (if enabled)
-        self.h1_mem = self._quantize_if_enabled(self.h1_mem)
-        
-        # 3. Generate spikes based on (quantized) membrane
-        h1_spiked = act_fun(self.h1_mem)
-        
-        # 4. Reset spiking neurons
-        self.h1_mem[h1_spiked.bool()] = 0.0
-        
-        # ===== OUTPUT LAYER =====
-        # 1. Event-driven accumulation
-        for h in torch.nonzero(h1_spiked, as_tuple=False).flatten():
-            self.h2_mem += self.fc2.weight[:, h]
-            
-            # Track extrema BEFORE quantization
-            h2_max = self.h2_mem.max().item()
-            h2_min = self.h2_mem.min().item()
-            if h2_max > step_max:
-                step_max = h2_max
-            if h2_min < step_min:
-                step_min = h2_min
-        
-        # 2. QUANTIZE membrane potential (if enabled)
-        self.h2_mem = self._quantize_if_enabled(self.h2_mem)
-        
-        # 3. Generate spikes based on (quantized) membrane
-        h2_spiked = act_fun(self.h2_mem)
-        
-        # 4. Reset spiking neurons
-        self.h2_mem[h2_spiked.bool()] = 0.0
+         # Process through all layers
+        layer_input = self.input_vec
         
         # ===== DECAY =====
-        self.h1_mem *= decay
-        self.h2_mem *= decay
+        for i in range(self.num_layers):
+            mem = getattr(self, f"h{i+1}_mem")
+            setattr(self, f"h{i+1}_mem", mem * decay)
+
+        for layer_idx in range(self.num_layers):
+            mem = getattr(self, f"h{layer_idx+1}_mem")
+            fc = self.fcs[layer_idx]
+            
+            # 1. Event-driven accumulation
+            for idx in torch.nonzero(layer_input, as_tuple=False).flatten():
+                mem += fc.weight[:, idx]
+                
+                # Track extrema BEFORE quantization
+                h_max = mem.max().item()
+                h_min = mem.min().item()
+                if h_max > step_max:
+                    step_max = h_max
+                if h_min < step_min:
+                    step_min = h_min
+            
+            # 2. QUANTIZE membrane potential (if enabled)
+            mem = self._quantize_if_enabled(mem)
+            setattr(self, f"h{layer_idx+1}_mem", mem)
+            
+            # 3. Generate spikes based on (quantized) membrane
+            h_spiked = act_fun(mem)
+            
+            # 4. Reset spiking neurons
+            mem[h_spiked.bool()] = 0.0
+            setattr(self, f"h{layer_idx+1}_mem", mem)
+            
+            # Output of this layer becomes input to next
+            layer_input = h_spiked
         
-        return h2_spiked, step_max, step_min
+        return layer_input, step_max, step_min
 
 
 

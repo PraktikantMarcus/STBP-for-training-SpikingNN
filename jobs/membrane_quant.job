@@ -79,7 +79,8 @@ python -u quantize_membrane.py \
     --layers $LAYERS \
     --rnd "$ROUNDING" \
     --ovf "$OVERFLOW" \
-    --outdir "results/membrane_quant/"
+    --outdir "results/membrane_quant/" \
+    --fixWQuant \
 
 EXIT_CODE=$?
 
