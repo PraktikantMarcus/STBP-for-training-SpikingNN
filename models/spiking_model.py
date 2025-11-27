@@ -359,6 +359,10 @@ class Event_SMLP_Quantized(nn.Module):
         self.register_buffer("input_vec", torch.zeros(layers[0]))
         for i in range(self.num_layers):
             self.register_buffer(f"h{i+1}_mem", torch.zeros(layers[i+1]))
+        
+        self.mems = nn.ParameterList([
+            nn.Parameter(torch.zeros(layers[i+1]), requires_grad=False)
+            for i in range(self.num_layers)])
 
     def reset_state(self):
         """Reset membrane potentials for new sample."""
@@ -436,10 +440,9 @@ class Event_SMLP_Quantized(nn.Module):
         """
         from models.spiking_model import act_fun, decay
         
-       # ===== DECAY =====
+        # ===== DECAY =====
         for i in range(self.num_layers):
-            mem = getattr(self, f"h{i+1}_mem")
-            setattr(self, f"h{i+1}_mem", mem * decay)
+            self.mems[i] *= decay
         
         # Process through all layers
         layer_input = self.input_vec
@@ -454,14 +457,16 @@ class Event_SMLP_Quantized(nn.Module):
             
                 # 2. QUANTIZE membrane potential (if enabled)
                 mem = self._quantize_if_enabled(mem)
-                setattr(self, f"h{layer_idx+1}_mem", mem)
+                self.mems[layer_idx] = mem
+                # setattr(self, f"h{layer_idx+1}_mem", mem)
             
             # 3. Generate spikes based on (quantized) membrane
             h_spiked = act_fun(mem)
             
             # 4. Reset spiking neurons
             mem[h_spiked.bool()] = 0.0
-            setattr(self, f"h{layer_idx+1}_mem", mem)
+            self.mems[layer_idx] = mem
+            # setattr(self, f"h{layer_idx+1}_mem", mem)
             
             # Output of this layer becomes input to next
             layer_input = h_spiked
@@ -482,13 +487,12 @@ class Event_SMLP_Quantized(nn.Module):
         step_max = -float("inf")
         step_min = +float("inf")
         
-         # Process through all layers
+        # Process through all layers
         layer_input = self.input_vec
         
         # ===== DECAY =====
         for i in range(self.num_layers):
-            mem = getattr(self, f"h{i+1}_mem")
-            setattr(self, f"h{i+1}_mem", mem * decay)
+            self.mems[i] *= decay
 
         for layer_idx in range(self.num_layers):
             mem = getattr(self, f"h{layer_idx+1}_mem")
@@ -506,16 +510,18 @@ class Event_SMLP_Quantized(nn.Module):
                 if h_min < step_min:
                     step_min = h_min
             
-            # 2. QUANTIZE membrane potential (if enabled)
-            mem = self._quantize_if_enabled(mem)
-            setattr(self, f"h{layer_idx+1}_mem", mem)
+                # 2. QUANTIZE membrane potential (if enabled)
+                mem = self._quantize_if_enabled(mem)
+                self.mems[layer_idx] = mem
+                #setattr(self, f"h{layer_idx+1}_mem", mem)
             
             # 3. Generate spikes based on (quantized) membrane
             h_spiked = act_fun(mem)
             
             # 4. Reset spiking neurons
             mem[h_spiked.bool()] = 0.0
-            setattr(self, f"h{layer_idx+1}_mem", mem)
+            self.mems[layer_idx] = mem
+            # setattr(self, f"h{layer_idx+1}_mem", mem)
             
             # Output of this layer becomes input to next
             layer_input = h_spiked

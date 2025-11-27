@@ -1,0 +1,5 @@
+m,n,rounding,overflow,acc
+0,0,nearest,saturate,9.8
+0,1,nearest,saturate,9.8
+0,2,nearest,saturate,9.8
+0,3,nearest,saturate,9.8

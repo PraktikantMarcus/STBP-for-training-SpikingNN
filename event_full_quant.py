@@ -39,7 +39,7 @@ def process_batch(args):
     Returns:
         tuple of (predictions, labels)
     """
-    images, labels, layers, model_state_dict, time_window, m, n, rnd, ovf, = args
+    images, labels, layers, model_state_dict, time_window, m, n, rnd, ovf, fixWQuant, dynWQuant = args
     
     # Create model in this worker process
     model = Event_SMLP_Quantized(layers,
@@ -50,7 +50,10 @@ def process_batch(args):
                                  ovf,
                                  False)
     model.load_state_dict(model_state_dict, strict=False)
-    quantize_model_weights_(model,0,2,"nearest","saturate")
+    if dynWQuant:
+        quantize_model_weights_(model,m,n,rnd,ovf)
+    elif fixWQuant:
+        quantize_model_weights_(model,0,2,"nearest", "saturate")
     model.eval()
     model.to('cpu')
     
@@ -126,7 +129,7 @@ def run_inference(args, m, n):
     print(f"Starting inference with {num_workers} workers...")
     worker_args = []
     for images, labels in test_loader:
-        worker_args.append((images, labels, args.layers, model_state, time_window, m, n, args.rnd, args.ovf))
+        worker_args.append((images, labels, args.layers, model_state, time_window, m, n, args.rnd, args.ovf, args.fixWQuant, args.dynWQuant))
 
     # Create process pool and process batches
     start_time = time.time()
@@ -181,13 +184,9 @@ def run_inference(args, m, n):
     return {
         'm': m,
         'n': n,
-        'rnd': args.rnd,
-        'ovf': args.ovf,
-        'accuracy': accuracy,
-        'total_samples': total,
-        'correct': correct,
-        'elapsed_time': elapsed_time,
-        'throughput': total/elapsed_time
+        'rounding': args.rnd,
+        'overflow': args.ovf,
+        'acc': accuracy
     }
 def main():
     parser = argparse.ArgumentParser(description="Run multicore, fully-quantized inference. Using specific rounding and overflow mechanics for membrane quantization")
@@ -215,11 +214,11 @@ def main():
     print()
 
     if args.dynWQuant: 
-        args.outdir = "results/dyn_full_quantization/"
+        args.outdir = "results/event_dyn_full_quant/"
         print(f"Dynamic weight quantization activated")
     
     elif args.fixWQuant:
-        args.outdir = "results/event_fix_full_quantization/"
+        args.outdir = "results/event_fix_full_quant/"
         print(f"Fixed weight quantization activated")
 
     # Set seed in main process
@@ -248,11 +247,13 @@ def main():
     df = pd.DataFrame(all_results)
     
     # Sort by accuracy descending
-    df = df.sort_values('accuracy', ascending=False)
+    df = df.sort_values('acc', ascending=False)
     
     # Save to CSV
-    output_path = args.outdir
+    layer_string = "_".join(str(x) for x in args.layers)
+    output_path = args.outdir + layer_string + f"/{args.rnd}_{args.ovf}.csv"
     df.to_csv(output_path, index=False)
+    
     print(f"\n{'='*80}")
     print(f"Results saved to: {output_path}")
     print(f"{'='*80}\n")
@@ -260,20 +261,18 @@ def main():
     # Print summary
     print("\nTop 10 Configurations by Accuracy:")
     print("="*80)
-    print(df[['m', 'n', 'accuracy', 'throughput']].head(10).to_string(index=False))
+    print(df[['m', 'n', 'acc']].head(10).to_string(index=False))
     print()
     
     print("\nBottom 5 Configurations by Accuracy:")
     print("="*80)
-    print(df[['m', 'n', 'accuracy', 'throughput']].tail(5).to_string(index=False))
+    print(df[['m', 'n', 'acc']].tail(5).to_string(index=False))
     print()
     
     # Find best configuration
     best = df.iloc[0]
     print(f"\nBest Configuration:")
-    print(f"  Q{int(best['m'])}.{int(best['n'])} - Accuracy: {best['accuracy']:.3f}%")
-    print(f"  Throughput: {best['throughput']:.1f} samples/sec")
-    print(f"  Time: {best['elapsed_time']:.1f}s")
+    print(f"  Q{int(best['m'])}.{int(best['n'])} - Accuracy: {best['acc']:.3f}%")
     print()
 
 if __name__ == '__main__':
