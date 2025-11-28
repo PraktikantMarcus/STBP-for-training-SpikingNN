@@ -317,31 +317,24 @@ class Event_SMLP(nn.Module):
 class Event_SMLP_Quantized(nn.Module):
     """
     Event-driven SMLP with membrane quantization support.
-    
-    Args:
-        quant_mem: Enable membrane quantization
-        mem_m: Mantissa bits for quantization
-        mem_n: Exponent bits for quantization
-        mem_rounding: Rounding mode ('nearest', 'floor', 'ceil')
-        mem_overflow: Overflow handling ('saturate', 'wrap')
-        track_extrema: Track min/max membrane potentials (for analysis)
     """
     
     def __init__(self, 
-                layers = (784, 400, 10),
-                 quant_mem: bool = False,
-                 mem_m: int = 2, 
-                 mem_n: int = 4,
-                 mem_rounding: str = "nearest",
-                 mem_overflow: str = "saturate",
-                 track_extrema: bool = False):
+                layer_sizes=(784, 400, 10),  # Renamed parameter for clarity
+                quant_mem: bool = False,
+                mem_m: int = 2, 
+                mem_n: int = 4,
+                mem_rounding: str = "nearest",
+                mem_overflow: str = "saturate",
+                track_extrema: bool = False):
         super().__init__()
-        self.layers = layers
-        self.num_layers = len(layers) - 1  # Number of linear layers
         
-        # Create dynamic linear layers
-        self.fcs = nn.ModuleList([
-            nn.Linear(layers[i], layers[i+1]) 
+        self.layer_sizes = layer_sizes  # Store layer sizes separately
+        self.num_layers = len(layer_sizes) - 1
+        
+        # Create dynamic linear layers (ModuleList)
+        self.layers = nn.ModuleList([
+            nn.Linear(layer_sizes[i], layer_sizes[i+1]) 
             for i in range(self.num_layers)
         ])
         
@@ -355,21 +348,18 @@ class Event_SMLP_Quantized(nn.Module):
         # Analysis flag
         self.track_extrema = track_extrema
         
-        # State buffers (single sample) - create for each layer
-        self.register_buffer("input_vec", torch.zeros(layers[0]))
-        for i in range(self.num_layers):
-            self.register_buffer(f"h{i+1}_mem", torch.zeros(layers[i+1]))
-        
+        # State buffers - use ParameterList (cleaner than getattr/setattr)
         self.mems = nn.ParameterList([
-            nn.Parameter(torch.zeros(layers[i+1]), requires_grad=False)
-            for i in range(self.num_layers)])
+            nn.Parameter(torch.zeros(layer_sizes[i+1]), requires_grad=False)
+            for i in range(self.num_layers)
+        ])
+        
+        self.register_buffer("input_vec", torch.zeros(layer_sizes[0]))
 
     def reset_state(self):
         """Reset membrane potentials for new sample."""
-        device = self.input_vec.device
         for i in range(self.num_layers):
-            mem = getattr(self, f"h{i+1}_mem")
-            setattr(self, f"h{i+1}_mem", torch.zeros_like(mem, device=device))
+            self.mems[i].data.zero_()
 
     def forward(self, input, time_window=20):
         """
@@ -380,11 +370,11 @@ class Event_SMLP_Quantized(nn.Module):
             time_window: Number of timesteps to simulate
             
         Returns:
-            outputs: Rate-coded outputs [B, 10]
+            outputs: Rate-coded outputs [B, output_size]
         """
         B = input.size(0)
-        output_size = self.layers[-1]
-        outputs = torch.zeros(B, 10, device=input.device)
+        output_size = self.layer_sizes[-1]  # Fixed: use layer_sizes, not layers
+        outputs = torch.zeros(B, output_size, device=input.device)
         
         # Process each sample independently
         for b in range(B):
@@ -410,15 +400,7 @@ class Event_SMLP_Quantized(nn.Module):
         return outputs
 
     def _quantize_if_enabled(self, membrane):
-        """
-        Apply quantization to membrane potential if enabled.
-        
-        Args:
-            membrane: Membrane potential tensor
-            
-        Returns:
-            Quantized membrane potential (or original if quantization disabled)
-        """
+        """Apply quantization to membrane potential if enabled."""
         if self.quant_mem:
             return quantize_membrane_potential(
                 membrane, 
@@ -435,7 +417,7 @@ class Event_SMLP_Quantized(nn.Module):
         Fast event-driven processing with optional quantization.
         No extrema tracking.
         
-       Returns:
+        Returns:
             h_final_spiked: Output spike vector [output_size]
         """
         from models.spiking_model import act_fun, decay
@@ -448,17 +430,17 @@ class Event_SMLP_Quantized(nn.Module):
         layer_input = self.input_vec
         
         for layer_idx in range(self.num_layers):
-            mem = getattr(self, f"h{layer_idx+1}_mem")
-            fc = self.fcs[layer_idx]
+            mem = self.mems[layer_idx]
+            fc = self.layers[layer_idx]
             
             # 1. Event-driven accumulation (only spiking inputs)
             for idx in torch.nonzero(layer_input, as_tuple=False).flatten():
                 mem += fc.weight[:, idx]
-            
                 # 2. QUANTIZE membrane potential (if enabled)
                 mem = self._quantize_if_enabled(mem)
+            
+                # Write back after all accumulations
                 self.mems[layer_idx] = mem
-                # setattr(self, f"h{layer_idx+1}_mem", mem)
             
             # 3. Generate spikes based on (quantized) membrane
             h_spiked = act_fun(mem)
@@ -466,37 +448,36 @@ class Event_SMLP_Quantized(nn.Module):
             # 4. Reset spiking neurons
             mem[h_spiked.bool()] = 0.0
             self.mems[layer_idx] = mem
-            # setattr(self, f"h{layer_idx+1}_mem", mem)
             
             # Output of this layer becomes input to next
             layer_input = h_spiked
         
-        return layer_input  # Final layer spikes
+        return layer_input
 
     def process_time_step_collect_extrema(self):
         """
         Event-driven processing with extrema tracking and optional quantization.
         
         Returns:
-            h2_spiked: Output spike vector [10]
+            h_final_spiked: Output spike vector
             step_max: Maximum membrane potential (pre-quantization)
             step_min: Minimum membrane potential (pre-quantization)
         """
-        from spiking_model import act_fun, decay
+        from models.spiking_model import act_fun, decay
         
         step_max = -float("inf")
         step_min = +float("inf")
         
-        # Process through all layers
-        layer_input = self.input_vec
-        
         # ===== DECAY =====
         for i in range(self.num_layers):
             self.mems[i] *= decay
-
+        
+        # Process through all layers
+        layer_input = self.input_vec
+        
         for layer_idx in range(self.num_layers):
-            mem = getattr(self, f"h{layer_idx+1}_mem")
-            fc = self.fcs[layer_idx]
+            mem = self.mems[layer_idx]
+            fc = self.layers[layer_idx]
             
             # 1. Event-driven accumulation
             for idx in torch.nonzero(layer_input, as_tuple=False).flatten():
@@ -509,11 +490,12 @@ class Event_SMLP_Quantized(nn.Module):
                     step_max = h_max
                 if h_min < step_min:
                     step_min = h_min
-            
+                
                 # 2. QUANTIZE membrane potential (if enabled)
                 mem = self._quantize_if_enabled(mem)
+            
+                # Write back
                 self.mems[layer_idx] = mem
-                #setattr(self, f"h{layer_idx+1}_mem", mem)
             
             # 3. Generate spikes based on (quantized) membrane
             h_spiked = act_fun(mem)
@@ -521,7 +503,6 @@ class Event_SMLP_Quantized(nn.Module):
             # 4. Reset spiking neurons
             mem[h_spiked.bool()] = 0.0
             self.mems[layer_idx] = mem
-            # setattr(self, f"h{layer_idx+1}_mem", mem)
             
             # Output of this layer becomes input to next
             layer_input = h_spiked
