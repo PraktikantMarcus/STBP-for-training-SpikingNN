@@ -1,0 +1,25 @@
+\begin{table}[htbp]
+\centering
+\caption{Best accuracy per bit budget (784-200-200-10)}
+\label{tab:best_configs_784_200_200_10}
+\begin{tabular}{cccccc}
+\toprule
+Bits & m & n & Rounding & Overflow & Accuracy (\%) \\
+\midrule
+0 & 0 & 0 & floor & saturate & 9.80 \\
+1 & 1 & 0 & stochastic & wrap & 10.22 \\
+2 & 0 & 2 & nearest & saturate & 97.50 \\
+3 & 0 & 3 & nearest & saturate & 98.41 \\
+4 & 0 & 4 & nearest & saturate & 98.51 \\
+5 & 0 & 5 & nearest & saturate & 98.55 \\
+6 & 1 & 5 & nearest & saturate & 98.60 \\
+7 & 0 & 7 & trunc & saturate & 98.66 \\
+8 & 1 & 7 & trunc & saturate & 98.63 \\
+9 & 2 & 7 & nearest & saturate & 98.72 \\
+10 & 2 & 8 & trunc & saturate & 98.66 \\
+11 & 4 & 7 & trunc & saturate & 98.71 \\
+12 & 5 & 7 & trunc & saturate & 98.64 \\
+13 & 5 & 8 & ceil & saturate & 98.57 \\
+\bottomrule
+\end{tabular}
+\end{table}
