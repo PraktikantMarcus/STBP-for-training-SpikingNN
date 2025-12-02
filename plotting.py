@@ -903,7 +903,7 @@ def create_latex_table(dir):
         result_table = best_per_bit[['bits', 'm', 'n', 'rounding', 'overflow', 'acc']].copy()
         result_table.columns = ['Bits', 'm', 'n', 'Rounding', 'Overflow', 'Accuracy (\%)']
         
-           # Convert to integers
+        # Convert to integers
         result_table['Bits'] = result_table['Bits'].astype(int)
         result_table['m'] = result_table['m'].astype(int)
         result_table['n'] = result_table['n'].astype(int)
@@ -928,13 +928,44 @@ def create_latex_table(dir):
             position_float="centering",
             hrules=True,
             column_format="cccccc"
-            #index=False
+        )
+
+        best_per_fix = df[(df['m'] == 1) & (df['n'] == 3)].nlargest(1, 'acc').copy()
+
+        # Select relevant columns
+        fix_table = best_per_fix[['bits', 'm', 'n', 'rounding', 'overflow', 'acc']].copy()
+        fix_table.columns = ['Bits', 'm', 'n', 'Rounding', 'Overflow', 'Accuracy (\%)']
+        
+        # Convert to integers
+        fix_table['Bits'] = fix_table['Bits'].astype(int)
+        fix_table['m'] = fix_table['m'].astype(int)
+        fix_table['n'] = fix_table['n'].astype(int)
+
+        # Sort by bits
+        fix_table = fix_table.sort_values('Bits').reset_index(drop=True)
+        
+        # Style: format only the Accuracy column with 2 decimals
+        styled = fix_table.style.format({
+            'Bits': '{:d}',
+            'm': '{:d}',
+            'n': '{:d}',
+            'Accuracy (\%)': '{:.2f}'
+        }).hide(axis="index")
+
+        latex_fix_table = styled.to_latex(
+            caption=f"Best accuracy with Q1.3 ({model_name})",
+            label=f"tab:fix_configs_{path.name}",
+            position="htbp",
+            position_float="centering",
+            hrules=True,
+            column_format="cccccc"
         )
         
         out_path = path / f"best_configs_table.tex"
 
         with open(out_path, 'w') as f:
             f.write(latex_table)
+            f.write(latex_fix_table)
         
         print(f"✓ Detailed LaTeX table saved to: {out_path}")
         print(f"\nPreview:")
