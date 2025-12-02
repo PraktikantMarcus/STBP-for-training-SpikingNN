@@ -9,7 +9,7 @@
 #SBATCH --job-name=membrane_quant
 #SBATCH --output=logs/membrane_quant/%A_%a.out
 #SBATCH --error=logs/membrane_quant/%A_%a.err
-#SBATCH --array=0-59%10
+#SBATCH --array=0-59%15
 
 # This is a SLURM job array that runs different parameter combinations in parallel
 # 6 models × 5 rounding × 2 overflow = 60 total combinations

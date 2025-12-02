@@ -217,8 +217,8 @@ def main():
     parser.add_argument("--outdir", default="results/fix_membrane_quantization/")
     parser.add_argument("--fixWQuant", action='store_true')
     parser.add_argument("--dynWQuant", action='store_true')
-    parser.add_argument("--wm", default=0)
-    parser.add_argument("--wn", default=2)
+    parser.add_argument("--wm", default=1)
+    parser.add_argument("--wn", default=3)
 
 
     args = parser.parse_args()
