@@ -4,11 +4,12 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=32G
-#SBATCH --time=6:00:00
+#SBATCH --time=09:00:00
 #SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
 #SBATCH --job-name=event_full_quant
 #SBATCH --output=logs/event_full_quant/%A_%a.out
 #SBATCH --error=logs/event_full_quant/%A_%a.err
+#SBATCH --array=0-9%5
 
 # This is a SLURM job array that runs different parameter combinations in parallel
 # 6 models × 5 rounding × 2 overflow = 60 total combinations
@@ -22,13 +23,13 @@ export PYTHONUNBUFFERED=1
 
 #Define parameter combinations
 MODEL_ARCHITECTURE=(
-    "784 800 10"
+    "784 400 400 10"
 )
 
 
-ROUNDING_METHODS=("trunc")
+ROUNDING_METHODS=("nearest" "floor" "ceil" "stochastic" "trunc")
 
-OVERFLOW_METHODS=("saturate")
+OVERFLOW_METHODS=("saturate" "wrap")
 
 
 # Calculate which combination to use based on array task ID

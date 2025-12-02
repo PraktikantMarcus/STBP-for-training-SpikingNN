@@ -53,7 +53,7 @@ def process_batch(args):
     if dynWQuant:
         quantize_model_weights_(model,m,n,rnd,ovf)
     elif fixWQuant:
-        quantize_model_weights_(model,0,2,"nearest", "saturate")
+        quantize_model_weights_(model,1,3,"nearest", "saturate")
     model.eval()
     model.to('cpu')
     
@@ -203,8 +203,8 @@ def main():
     parser.add_argument("--outdir", type=str, default="quantization_results.csv", help="Output CSV file for results")
     parser.add_argument("--fixWQuant", action='store_true')
     parser.add_argument("--dynWQuant", action='store_true')
-    parser.add_argument("--wm", default=0)
-    parser.add_argument("--wn", default=2)
+    parser.add_argument("--wm", default=1)
+    parser.add_argument("--wn", default=3)
 
     args = parser.parse_args()
     print("Starting quantization parameter sweep...")
