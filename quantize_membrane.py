@@ -147,7 +147,7 @@ def both_quant_experiment():
         for n in range(0, 9):
             for rnd in ["nearest", "stochastic", "floor", "ceil", "trunc"]:
                 for ovf in ["saturate", "wrap"]:
-                    print(f"\nTesting Q{m}.{n} with {rnd} rounding and {ovf} overflow for weight AND membrane potential quantization ...")
+                    print(f"\nTesting Q{m}.{n} with {rnd} rounding and {ovf} overflow for weight AND weight potential quantization ...")
             
                     # Quantize both
                     snn_both = SMLP_MemQuant(

@@ -80,7 +80,7 @@ python -u event_full_quant.py \
     --rnd "$ROUNDING" \
     --ovf "$OVERFLOW" \
     --outdir "results/event_full_quant/" \
-    --fixWQuant \
+    --dynWQuant \
 
 EXIT_CODE=$?
 
