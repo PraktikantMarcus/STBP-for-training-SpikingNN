@@ -74,7 +74,7 @@ def mem_quant(args):
             # Load same weights (not quantized)
             snn_memquant.load_state_dict(ckpt["net"])
             if args.fixWQuant:
-                models.quant_utils.quantize_model_weights_(snn_memquant, args.wm, args.wn, args.rnd, args.ovf)
+                models.quant_utils.quantize_model_weights_(snn_memquant, args.wm, args.wn, "nearest", "saturate")
             elif args.dynWQuant:
                 models.quant_utils.quantize_model_weights_(snn_memquant, m, n, args.rnd, args.ovf)
                     
