@@ -450,48 +450,52 @@ def combiWeightMultiModel(max_m = int(3), min_m = 0, max_n = 5, min_n = 0):
         fig, axes = plt.subplots(2, 5, figsize=(20, 8))
         axes = axes.flatten()
         counter = 0
-        combinations = [(rnd, ovf) for rnd in rounding_order for ovf in overflow_order]
-        
-        for counter, (rnd, ovf) in enumerate(combinations):
-            if counter >= len(axes):
-                print(f"Warning: More combinations than subplot positions")
-                break
-            ax = axes[counter]
-            dataPath = f"./results/weight_quant/{path}/{rnd}_{ovf}.csv"
-            df = dataLoader(dataPath, "weight_multi_model")
-            max_m, max_n, min_m, min_n = realRangeCheck(df,"full_event_quant", max_m, max_n, min_m, min_n)
-            
-            for m_val in range(min_m, max_m +1):
-                # Filter data for this specific combination
-                mask = (
-                    (df["m"] == m_val) &
-                    (df["n"]<= max_n) &
-                    (df["n"]>= min_n))
-                
-                subset = df[mask].sort_values("n")
 
-                if len(subset) > 0:  # Only plot if data exists
-                    ax.plot(
-                        subset["n"],
-                        subset["acc"], 
-                        marker = markers.get(m_val, 'o'),        # Different marker per m
-                        linestyle=linestyles.get(m_val, '-'),    # Different line style per m
-                        color=colors.get(m_val, 'black'),        # Different color per m 
-                        label=f"m={m_val}",
-                        linewidth=2.0,
-                        markersize=6,
-                        alpha=0.85)
+        for ovf in overflow_order:
+            for rnd in rounding_order:
+
+                if counter >= len(axes):
+                    print(f"Warning: More combinations than subplot positions")
+                    break
+                
+                ax = axes[counter]
+                counter += 1
+
+                dataPath = f"./results/weight_quant/{path}/{rnd}_{ovf}.csv"
+                df = dataLoader(dataPath, "weight_multi_model")
+                max_m, max_n, min_m, min_n = realRangeCheck(df,"full_event_quant", max_m, max_n, min_m, min_n)
+                
+                for m_val in range(min_m, max_m +1):
+                    # Filter data for this specific combination
+                    mask = (
+                        (df["m"] == m_val) &
+                        (df["n"]<= max_n) &
+                        (df["n"]>= min_n))
+                    
+                    subset = df[mask].sort_values("n")
+
+                    if len(subset) > 0:  # Only plot if data exists
+                        ax.plot(
+                            subset["n"],
+                            subset["acc"], 
+                            marker = markers.get(m_val, 'o'),        # Different marker per m
+                            linestyle=linestyles.get(m_val, '-'),    # Different line style per m
+                            color=colors.get(m_val, 'black'),        # Different color per m 
+                            label=f"m={m_val}",
+                            linewidth=2.0,
+                            markersize=6,
+                            alpha=0.85)
+                
+                # Format subplot
+                title = f"Rnd = {rnd}, Ovf = {ovf}"
+                ax.set_title(title, fontsize=10, fontweight='bold')
+                ax.set_xlabel("n (fractional bits)", fontsize=10)
+                ax.set_ylabel("Accuracy (%)", fontsize=10)
+                ax.set_ylim(0, 100)
+                ax.set_xticks(range(min_n, max_n + 1))
+                ax.grid(True, linestyle='--', alpha=0.4)
+                ax.legend(fontsize=6, loc='best')
             
-            # Format subplot
-            title = f"Rnd = {rnd}, Ovf = {ovf}"
-            ax.set_title(title, fontsize=10, fontweight='bold')
-            ax.set_xlabel("n (fractional bits)", fontsize=10)
-            ax.set_ylabel("Accuracy (%)", fontsize=10)
-            ax.set_ylim(0, 100)
-            ax.set_xticks(range(min_n, max_n + 1))
-            ax.grid(True, linestyle='--', alpha=0.4)
-            ax.legend(fontsize=6, loc='best')
-        
         # Add main title
         fig.suptitle(f'{path} - Weights Quantization - Accuracy vs n', 
                     fontsize=14, fontweight='bold', y=0.98)
@@ -598,46 +602,51 @@ def combiMembraneMultiModel(max_m = int(3), min_m = 0, max_n = 5, min_n = 0):
         counter = 0
         combinations = [(rnd, ovf) for rnd in rounding_order for ovf in overflow_order]
         
-        for counter, (rnd, ovf) in enumerate(combinations):
-            if counter >= len(axes):
-                print(f"Warning: More combinations than subplot positions")
-                break
-            ax = axes[counter]
-            dataPath = f"./results/membrane_quant/{path}/{rnd}_{ovf}.csv"
-            df = dataLoader(dataPath, "membrane_multi_model")
-            max_m, max_n, min_m, min_n = realRangeCheck(df,"full_event_quant", max_m, max_n, min_m, min_n)
-            
-            for m_val in range(min_m, max_m +1):
-                # Filter data for this specific combination
-                mask = (
-                    (df["m"] == m_val) &
-                    (df["n"]<= max_n) &
-                    (df["n"]>= min_n))
-                
-                subset = df[mask].sort_values("n")
+        for ovf in overflow_order:
+            for rnd in rounding_order:
 
-                if len(subset) > 0:  # Only plot if data exists
-                    ax.plot(
-                        subset["n"],
-                        subset["acc"], 
-                        marker = markers.get(m_val, 'o'),        # Different marker per m
-                        linestyle=linestyles.get(m_val, '-'),    # Different line style per m
-                        color=colors.get(m_val, 'black'),        # Different color per m 
-                        label=f"m={m_val}",
-                        linewidth=2.0,
-                        markersize=6,
-                        alpha=0.85)
+                if counter >= len(axes):
+                    print(f"Warning: More combinations than subplot positions")
+                    break
+                
+                ax = axes[counter]
+                counter += 1
+
+                dataPath = f"./results/membrane_quant/{path}/{rnd}_{ovf}.csv"
+                df = dataLoader(dataPath, "membrane_multi_model")
+                max_m, max_n, min_m, min_n = realRangeCheck(df,"full_event_quant", max_m, max_n, min_m, min_n)
+                
+                for m_val in range(min_m, max_m +1):
+                    # Filter data for this specific combination
+                    mask = (
+                        (df["m"] == m_val) &
+                        (df["n"]<= max_n) &
+                        (df["n"]>= min_n))
+                    
+                    subset = df[mask].sort_values("n")
+
+                    if len(subset) > 0:  # Only plot if data exists
+                        ax.plot(
+                            subset["n"],
+                            subset["acc"], 
+                            marker = markers.get(m_val, 'o'),        # Different marker per m
+                            linestyle=linestyles.get(m_val, '-'),    # Different line style per m
+                            color=colors.get(m_val, 'black'),        # Different color per m 
+                            label=f"m={m_val}",
+                            linewidth=2.0,
+                            markersize=6,
+                            alpha=0.85)
+                
+                # Format subplot
+                title = f"Rnd = {rnd}, Ovf = {ovf}"
+                ax.set_title(title, fontsize=10, fontweight='bold')
+                ax.set_xlabel("n (fractional bits)", fontsize=10)
+                ax.set_ylabel("Accuracy (%)", fontsize=10)
+                ax.set_ylim(0, 100)
+                ax.set_xticks(range(min_n, max_n + 1))
+                ax.grid(True, linestyle='--', alpha=0.4)
+                ax.legend(fontsize=6, loc='best')
             
-            # Format subplot
-            title = f"Rnd = {rnd}, Ovf = {ovf}"
-            ax.set_title(title, fontsize=10, fontweight='bold')
-            ax.set_xlabel("n (fractional bits)", fontsize=10)
-            ax.set_ylabel("Accuracy (%)", fontsize=10)
-            ax.set_ylim(0, 100)
-            ax.set_xticks(range(min_n, max_n + 1))
-            ax.grid(True, linestyle='--', alpha=0.4)
-            ax.legend(fontsize=6, loc='best')
-        
         # Add main title
         fig.suptitle(f'{path} - Membrane Quantization - Accuracy vs n', 
                     fontsize=14, fontweight='bold', y=0.98)
@@ -746,7 +755,7 @@ def combiMemWeightsMultiModel(args, max_m = 5, min_m = 0, max_n = 8, min_n = 0):
         fig, axes = plt.subplots(2, 5, figsize=(20, 8))
         axes = axes.flatten()
         counter = 0
-        combinations = [(rnd, ovf) for rnd in rounding_order for ovf in overflow_order]
+
         
         for ovf in overflow_order:
             for rnd in rounding_order:
@@ -794,7 +803,7 @@ def combiMemWeightsMultiModel(args, max_m = 5, min_m = 0, max_n = 8, min_n = 0):
                 ax.legend(fontsize=6, loc='best')
             
         # Add main title
-        fig.suptitle(f'{path} - Event Driven Membrane & Weight (Q0.2) Quantization', 
+        fig.suptitle(f'{path} - Membrane & Weight (Q1.3) Quantization', 
                     fontsize=14, fontweight='bold', y=0.98)
 
         plt.tight_layout()
