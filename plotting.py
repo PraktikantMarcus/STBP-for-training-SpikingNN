@@ -803,7 +803,7 @@ def combiMemWeightsMultiModel(args, max_m = 5, min_m = 0, max_n = 8, min_n = 0):
                 ax.legend(fontsize=6, loc='best')
             
         # Add main title
-        fig.suptitle(f'{path} - Membrane & Weight (Q1.3) Quantization', 
+        fig.suptitle(f'{path} - Membrane & Weight (Q0.2) Quantization', 
                     fontsize=14, fontweight='bold', y=0.98)
 
         plt.tight_layout()
