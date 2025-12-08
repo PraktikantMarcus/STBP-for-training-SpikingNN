@@ -200,7 +200,7 @@ def main():
     parser.add_argument("--m_min", type=int, default=0, help="Minimum value for m in Qm.n (default: 0)")
     parser.add_argument("--n_min", type=int, default=0, help="Minimum value for n in Qm.n (default: 0)")
     parser.add_argument("--seed", type=int, default=0, help="Enter the global seed for reproducibility")
-    parser.add_argument("--outdir", type=str, default="quantization_results.csv", help="Output CSV file for results")
+    parser.add_argument("--outdir", type=str, default="results/event_nW_mem_quant/", help="Output CSV file for results")
     parser.add_argument("--fixWQuant", action='store_true')
     parser.add_argument("--dynWQuant", action='store_true')
     parser.add_argument("--wm", default=1)
