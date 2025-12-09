@@ -24,7 +24,7 @@ export PYTHONUNBUFFERED=1
 #Define parameter combinations
 MODEL_ARCHITECTURE=(
     "784 200 10"
-    "784 400 10"
+    #"784 400 10"
     "784 800 10"
     "784 100 100 10"
     "784 200 200 10"
@@ -79,8 +79,8 @@ python -u event_full_quant.py \
     --layers $LAYERS \
     --rnd "$ROUNDING" \
     --ovf "$OVERFLOW" \
-    --outdir "results/event_full_quant/" \
-    --dynWQuant \
+    # --outdir "results/event_full_quant/" \
+    # --dynWQuant \
 
 EXIT_CODE=$?
 

@@ -1,0 +1,66 @@
+#!/bin/bash
+#SBATCH --partition=all
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=48
+#SBATCH --mem=32G
+#SBATCH --time=06:00:00
+#SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
+#SBATCH --job-name=mem_dist_job
+#SBATCH --output=logs/mem_dist/mem_dist_job_%A_%a.out
+#SBATCH --error=logs/mem_dist/mem_dist_job_%A_%a.err
+#SBATCH --array=0-5
+
+source activate torch312
+
+# Environment variables
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+# Define parameter combinations
+MODEL_ARCHITECTURE=(
+    "784 200 10"
+    "784 400 10"
+    "784 800 10"
+    "784 100 100 10"
+    "784 200 200 10"
+    "784 400 400 10"
+)
+
+
+NUM_ARCHITECTURE=${#MODEL_ARCHITECTURE[@]}
+
+MODEL_IDX=$SLURM_ARRAY_TASK_ID
+
+LAYERS="${MODEL_ARCHITECTURE[$MODEL_IDX]}"
+
+echo "=========================================="
+echo "SLURM Job Array Task"
+echo "=========================================="
+echo "Array Job ID:     $SLURM_ARRAY_JOB_ID"
+echo "Array Task ID:    $SLURM_ARRAY_TASK_ID"
+echo "Job ID:           $SLURM_JOB_ID"
+echo "Node:             $(hostname)"
+echo "CPUs:             $SLURM_CPUS_PER_TASK"
+echo "Architecture:     $LAYERS"
+echo "Start time:       $(date)"
+echo "=========================================="
+echo ""
+
+
+python membrane_distribution.py \
+    --layers $LAYERS\
+    --num_samples 10000 \
+    --batch_size 100 \
+    --data_path ./raw/ \
+    --seed 0
+    --outdir results/1.1 - membrane_distributions/
+EXIT_CODE=$?
+
+
+echo ""
+echo "=========================================="
+echo "Job completed at $(date)"
+echo "Exit code: $EXIT_CODE"
+echo "=========================================="
+
+exit $EXIT_CODE

@@ -320,7 +320,7 @@ class Event_SMLP_Quantized(nn.Module):
     """
     
     def __init__(self, 
-                layer_sizes=(784, 400, 10),  # Renamed parameter for clarity
+                layer_sizes=(784, 400, 10),  # Renamed parameter for clarity 
                 quant_mem: bool = False,
                 mem_m: int = 2, 
                 mem_n: int = 4,
@@ -331,6 +331,7 @@ class Event_SMLP_Quantized(nn.Module):
         
         self.layer_sizes = layer_sizes  # Store layer sizes separately
         self.num_layers = len(layer_sizes) - 1
+
         
         # Create dynamic linear layers (ModuleList)
         self.layers = nn.ModuleList([

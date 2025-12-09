@@ -1,0 +1,2 @@
+model_config,layers,num_layers,global_min,global_max,range,mean,std,median,total_values,num_samples,seed
+784_400_10,"[784, 400, 10]",2,-33.0656623840332,21.561599731445312,54.627262115478516,0.0989840030670166,0.29864048957824707,0.0,2000000,10000,0
