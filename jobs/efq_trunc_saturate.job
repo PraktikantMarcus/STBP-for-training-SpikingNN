@@ -1,15 +1,14 @@
 #!/bin/bash
-#SBATCH --partition=gpu
+#SBATCH --partition=all
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task=64
 #SBATCH --mem=32G
 #SBATCH --time=09:00:00
 #SBATCH --chdir=/work/fritzsche6/STBP-for-training-SpikingNN
 #SBATCH --job-name=event_full_quant
 #SBATCH --output=logs/event_full_quant/%A_%a.out
 #SBATCH --error=logs/event_full_quant/%A_%a.err
-#SBATCH --array=0-9%5
 
 # This is a SLURM job array that runs different parameter combinations in parallel
 # 6 models × 5 rounding × 2 overflow = 60 total combinations
@@ -23,22 +22,20 @@ export PYTHONUNBUFFERED=1
 
 #Define parameter combinations
 MODEL_ARCHITECTURE=(
-    "784 400 400 10"
+    "784 200 200 10"
 )
 
 
-ROUNDING_METHODS=("nearest" "floor" "ceil" "stochastic" "trunc")
+ROUNDING_METHODS=( "floor")
 
-OVERFLOW_METHODS=("saturate" "wrap")
+OVERFLOW_METHODS=( "wrap")
 
 
 # Calculate which combination to use based on array task ID
 # Task ID 0-59 maps to all combinations of (model, rounding, overflow)
 # Structure: For each model, iterate through all rounding×overflow combinations
 
-NUM_MODELS=${#MODEL_ARCHITECTURE[@]}
-NUM_ROUNDING=${#ROUNDING_METHODS[@]}
-NUM_OVERFLOW=${#OVERFLOW_METHODS[@]}
+
 
 # Combinations per model = 5 rounding × 2 overflow = 10
 COMBOS_PER_MODEL=$((NUM_ROUNDING * NUM_OVERFLOW))
@@ -71,11 +68,11 @@ echo ""
 
 # Run quantization sweep with specific parameters
 python -u event_full_quant.py \
-    --layers $LAYERS \
-    --rnd "$ROUNDING" \
-    --ovf "$OVERFLOW" \
-    --outdir "results/event_full_quant/" \
-    --fixWQuant \
+    --layers 784 200 200 10 \
+    --rnd "floor" \
+    --ovf "wrap" \
+    --outdir "results/event_nW_mem_quant/" \
+    --seed 0 \
 
 EXIT_CODE=$?
 
